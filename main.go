@@ -13,8 +13,12 @@ import (
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"golang.org/x/net/publicsuffix"
 )
+
+var labels = []string{"battery", "load", "site", "solar"}
 
 func main() {
 	log.SetFlags(log.Lshortfile | log.Ltime)
@@ -28,6 +32,7 @@ func main() {
 		"powerwall/excess_power",
 		"Topic to log inverse/negative of grid power to",
 	)
+	listen := flag.String("listen", ":9900", "Listen address for Prometheus handler")
 
 	flag.Parse()
 
@@ -81,6 +86,19 @@ func main() {
 
 	ticker := time.NewTicker(*pollingInterval)
 
+	http.Handle("/metrics", promhttp.Handler())
+	go func() {
+		http.ListenAndServe(*listen, nil)
+	}()
+
+	powerGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "energy",
+		Name:      "instantaneous_power",
+		Help:      "Instantaneous power of individual CT clamps",
+	}, []string{"meter"})
+
+	prometheus.MustRegister(powerGauge)
+
 	for {
 		resp, err = client.Get(fmt.Sprintf("https://%s/api/meters/aggregates", *powerwallIP))
 		if err != nil {
@@ -103,6 +121,12 @@ func main() {
 			_ = token.Wait()
 			if err := token.Error(); err != nil {
 				log.Fatal(err)
+			}
+		}
+
+		for _, label := range labels {
+			if v, ok := metersResp[label]; ok {
+				powerGauge.WithLabelValues(label).Set(v.InstantPower)
 			}
 		}
 
