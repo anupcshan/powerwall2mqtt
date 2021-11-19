@@ -18,6 +18,8 @@ import (
 	"golang.org/x/net/publicsuffix"
 )
 
+var labels = []string{"meter"}
+
 func main() {
 	log.SetFlags(log.Lshortfile | log.Ltime)
 
@@ -89,13 +91,25 @@ func main() {
 		http.ListenAndServe(*listen, nil)
 	}()
 
+	energyExportedGuage := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "energy",
+		Name:      "energy_exported",
+		Help:      "Total energy exported from individual meters (Wh)",
+	}, labels)
+
+	energyImportedGuage := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "energy",
+		Name:      "energy_imported",
+		Help:      "Total energy imported from individual meters (Wh)",
+	}, labels)
+
 	powerGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "energy",
 		Name:      "instantaneous_power",
-		Help:      "Instantaneous power of individual CT clamps",
-	}, []string{"meter"})
+		Help:      "Instantaneous power of individual CT clamps (W)",
+	}, labels)
 
-	prometheus.MustRegister(powerGauge)
+	prometheus.MustRegister(energyExportedGuage, energyImportedGuage, powerGauge)
 
 	for {
 		resp, err = client.Get(fmt.Sprintf("https://%s/api/meters/aggregates", *powerwallIP))
@@ -104,26 +118,30 @@ func main() {
 		}
 
 		var metersResp map[string]struct {
-			InstantPower float64 `json:"instant_power"`
+			InstantPower   float64 `json:"instant_power"`
+			EnergyExported float64 `json:"energy_exported"`
+			EnergyImported float64 `json:"energy_imported"`
 		}
 
 		if err := json.NewDecoder(resp.Body).Decode(&metersResp); err != nil {
 			log.Fatal(err)
 		}
-
 		_ = resp.Body.Close()
 
-		log.Println(metersResp)
+		log.Printf("%+v", metersResp)
+
+		for label, v := range metersResp {
+			energyExportedGuage.WithLabelValues(label).Set(v.EnergyExported)
+			energyImportedGuage.WithLabelValues(label).Set(v.EnergyImported)
+			powerGauge.WithLabelValues(label).Set(v.InstantPower)
+		}
+
 		if v, ok := metersResp["site"]; ok {
 			token := mqttClient.Publish(*gridPowerInverseTopic, 0, false, fmt.Sprintf("%f", -v.InstantPower))
 			_ = token.Wait()
 			if err := token.Error(); err != nil {
 				log.Fatal(err)
 			}
-		}
-
-		for label, v := range metersResp {
-			powerGauge.WithLabelValues(label).Set(v.InstantPower)
 		}
 
 		<-ticker.C
