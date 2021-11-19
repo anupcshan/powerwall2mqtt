@@ -18,8 +18,6 @@ import (
 	"golang.org/x/net/publicsuffix"
 )
 
-var labels = []string{"battery", "load", "site", "solar"}
-
 func main() {
 	log.SetFlags(log.Lshortfile | log.Ltime)
 
@@ -124,10 +122,8 @@ func main() {
 			}
 		}
 
-		for _, label := range labels {
-			if v, ok := metersResp[label]; ok {
-				powerGauge.WithLabelValues(label).Set(v.InstantPower)
-			}
+		for label, v := range metersResp {
+			powerGauge.WithLabelValues(label).Set(v.InstantPower)
 		}
 
 		<-ticker.C
