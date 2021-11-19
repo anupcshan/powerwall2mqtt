@@ -91,6 +91,12 @@ func main() {
 		http.ListenAndServe(*listen, nil)
 	}()
 
+	batteryLevelGuage := prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace: "energy",
+		Name:      "battery_percentage",
+		Help:      "Powerwall battery level percentage (0-100)",
+	})
+
 	energyExportedGuage := prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "energy",
 		Name:      "energy_exported",
@@ -109,7 +115,7 @@ func main() {
 		Help:      "Instantaneous power of individual CT clamps (W)",
 	}, labels)
 
-	prometheus.MustRegister(energyExportedGuage, energyImportedGuage, powerGauge)
+	prometheus.MustRegister(batteryLevelGuage, energyExportedGuage, energyImportedGuage, powerGauge)
 
 	for {
 		resp, err = client.Get(fmt.Sprintf("https://%s/api/meters/aggregates", *powerwallIP))
@@ -143,6 +149,24 @@ func main() {
 				log.Fatal(err)
 			}
 		}
+
+		resp, err = client.Get(fmt.Sprintf("https://%s/api/system_status/soe", *powerwallIP))
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		var soeResp struct {
+			Percentage float64 `json:"percentage"`
+		}
+
+		if err := json.NewDecoder(resp.Body).Decode(&soeResp); err != nil {
+			log.Fatal(err)
+		}
+		_ = resp.Body.Close()
+
+		batteryLevelGuage.Set(soeResp.Percentage)
+
+		log.Printf("%+v", soeResp)
 
 		<-ticker.C
 	}
