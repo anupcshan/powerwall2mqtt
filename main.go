@@ -26,15 +26,20 @@ func main() {
 	powerwallIP := flag.String("powerwall-ip", "", "Powerwall IP")
 	password := flag.String("password", "", "Powerwall password")
 	pollingInterval := flag.Duration("poll-interval", 10*time.Second, "Polling interval")
-	brokerUrl := flag.String("broker", "", "Broker url (e.g., tcp://127.0.0.1:1883)")
-	gridPowerInverseTopic := flag.String(
-		"grid-inverse-topic",
-		"powerwall/excess_power",
-		"Topic to log inverse/negative of grid power to",
-	)
+	brokerURL := flag.String("broker", "", "Broker url (e.g., tcp://127.0.0.1:1883)")
+	gridPowerInverseTopic := flag.String("grid-inverse-topic", "powerwall/excess_power", "Topic to log inverse/negative of grid power to")
+	openEVSEAddr := flag.String("openevse", "", "OpenEVSE address (like 192.168.X.X or openevse.local)")
 	listen := flag.String("listen", ":9900", "Listen address for Prometheus handler")
 
 	flag.Parse()
+
+	if *powerwallIP == "" {
+		log.Fatal("Powerwall IP not provided")
+	}
+
+	if *brokerURL == "" {
+		log.Fatal("Broker URL not provided")
+	}
 
 	jar, err := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
 	if err != nil {
@@ -76,7 +81,7 @@ func main() {
 
 	mqttClient := mqtt.NewClient(
 		mqtt.NewClientOptions().
-			AddBroker(*brokerUrl).
+			AddBroker(*brokerURL).
 			SetAutoReconnect(true),
 	)
 
@@ -164,9 +169,32 @@ func main() {
 		}
 		_ = resp.Body.Close()
 
+		log.Printf("%+v", soeResp)
+
 		batteryLevelGuage.Set(soeResp.Percentage)
 
-		log.Printf("%+v", soeResp)
+		if *openEVSEAddr != "" {
+			resp, err = http.Get(fmt.Sprintf("http://%s/status", *openEVSEAddr))
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			var evStatusResp struct {
+				MilliAmp int64   `json:"amp"`
+				Pilot    int64   `json:"pilot"`
+				Voltage  int64   `json:"voltage"`
+				WattHour float64 `json:"watthour"`
+				WattSec  float64 `json:"wattsec"`
+			}
+			if err := json.NewDecoder(resp.Body).Decode(&evStatusResp); err != nil {
+				log.Fatal(err)
+			}
+			_ = resp.Body.Close()
+
+			log.Printf("%+v", evStatusResp)
+			powerGauge.WithLabelValues("ev").Set(float64(evStatusResp.Voltage*evStatusResp.MilliAmp) / 1000)
+			energyImportedGuage.WithLabelValues("ev").Set(float64(evStatusResp.WattHour) + float64(evStatusResp.WattSec)/3600.0)
+		}
 
 		<-ticker.C
 	}
