@@ -165,7 +165,7 @@ func main() {
 				_ = resp.Body.Close()
 			}
 
-			if bLevel.EvBatteryLevel > 70 && evConfigResp.ChargeMode != "eco" {
+			if bLevel.EvBatteryLevel > 60 && evConfigResp.ChargeMode != "eco" {
 				log.Println("Charge level high enough - switch to PV divert")
 				resp, err = http.Post(fmt.Sprintf("http://%s/config", *openEVSEAddr), "application/json", strings.NewReader(`{"charge_mode": "eco"}`))
 				if err != nil {
