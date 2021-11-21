@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"net/http/cookiejar"
+	"strings"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -31,6 +32,7 @@ func main() {
 	openEVSEAddr := flag.String("openevse", "", "OpenEVSE address (like 192.168.X.X or openevse.local)")
 	listen := flag.String("listen", ":9900", "Listen address for Prometheus handler")
 	dryRun := flag.Bool("dry-run", true, "Dry run mode (disable any writes in dry run mode)")
+	evChargeLevelTopic := flag.String("ev-charge-level-topic", "", "MQTT topic with the most recently polled EV charge level (from onstar2mqtt)")
 
 	flag.Parse()
 
@@ -122,6 +124,57 @@ func main() {
 	}, labels)
 
 	prometheus.MustRegister(batteryLevelGuage, energyExportedGuage, energyImportedGuage, powerGauge)
+
+	if *evChargeLevelTopic != "" && *openEVSEAddr != "" {
+		mqttClient.Subscribe(*evChargeLevelTopic, 1, func(_ mqtt.Client, msg mqtt.Message) {
+			log.Printf("Got message: %s", msg.Payload())
+			var bLevel struct {
+				EvBatteryLevel float64 `json:"ev_battery_level"`
+			}
+
+			if err := json.Unmarshal(msg.Payload(), &bLevel); err != nil {
+				log.Fatal(err)
+			}
+
+			// Fetch current EVSE config
+			resp, err = http.Get(fmt.Sprintf("http://%s/config", *openEVSEAddr))
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			var evConfigResp struct {
+				ChargeMode string `json:"charge_mode"`
+			}
+			if err := json.NewDecoder(resp.Body).Decode(&evConfigResp); err != nil {
+				log.Fatal(err)
+			}
+			_ = resp.Body.Close()
+
+			log.Printf("%+v", evConfigResp)
+
+			if *dryRun {
+				return
+			}
+
+			if bLevel.EvBatteryLevel < 50 && evConfigResp.ChargeMode != "fast" {
+				log.Println("Charge level too low - disabling PV divert")
+				resp, err = http.Post(fmt.Sprintf("http://%s/config", *openEVSEAddr), "application/json", strings.NewReader(`{"charge_mode": "fast"}`))
+				if err != nil {
+					log.Fatal(err)
+				}
+				_ = resp.Body.Close()
+			}
+
+			if bLevel.EvBatteryLevel > 70 && evConfigResp.ChargeMode != "eco" {
+				log.Println("Charge level high enough - switch to PV divert")
+				resp, err = http.Post(fmt.Sprintf("http://%s/config", *openEVSEAddr), "application/json", strings.NewReader(`{"charge_mode": "eco"}`))
+				if err != nil {
+					log.Fatal(err)
+				}
+				_ = resp.Body.Close()
+			}
+		}).Wait()
+	}
 
 	for {
 		resp, err = client.Get(fmt.Sprintf("https://%s/api/meters/aggregates", *powerwallIP))
