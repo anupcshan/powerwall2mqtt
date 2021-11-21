@@ -30,6 +30,7 @@ func main() {
 	gridPowerInverseTopic := flag.String("grid-inverse-topic", "powerwall/excess_power", "Topic to log inverse/negative of grid power to")
 	openEVSEAddr := flag.String("openevse", "", "OpenEVSE address (like 192.168.X.X or openevse.local)")
 	listen := flag.String("listen", ":9900", "Listen address for Prometheus handler")
+	dryRun := flag.Bool("dry-run", true, "Dry run mode (disable any writes in dry run mode)")
 
 	flag.Parse()
 
@@ -148,10 +149,14 @@ func main() {
 		}
 
 		if v, ok := metersResp["site"]; ok {
-			token := mqttClient.Publish(*gridPowerInverseTopic, 0, false, fmt.Sprintf("%f", -v.InstantPower))
-			_ = token.Wait()
-			if err := token.Error(); err != nil {
-				log.Fatal(err)
+			if !*dryRun {
+				token := mqttClient.Publish(*gridPowerInverseTopic, 0, false, fmt.Sprintf("%f", -v.InstantPower))
+				_ = token.Wait()
+				if err := token.Error(); err != nil {
+					log.Fatal(err)
+				}
+			} else {
+				log.Printf("[DRY RUN] Sending %f on %s", -v.InstantPower, *gridPowerInverseTopic)
 			}
 		}
 
