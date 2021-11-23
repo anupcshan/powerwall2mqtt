@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -87,7 +86,16 @@ func main() {
 		http.ListenAndServe(*listen, nil)
 	}()
 
-	if *evChargeLevelTopic != "" && *openEVSEAddr != "" {
+	var evseClient *openEVSEClient
+	if *openEVSEAddr != "" {
+		evseClient = &openEVSEClient{
+			openEVSEAddr:        *openEVSEAddr,
+			energyImportedGauge: energyImportedGauge,
+			powerGauge:          powerGauge,
+		}
+	}
+
+	if *evChargeLevelTopic != "" && evseClient != nil {
 		mqttClient.Subscribe(*evChargeLevelTopic, 1, func(_ mqtt.Client, msg mqtt.Message) {
 			log.Printf("Got message: %s", msg.Payload())
 			var bLevel struct {
@@ -98,21 +106,13 @@ func main() {
 				log.Fatal(err)
 			}
 
+			batteryLevelGauge.WithLabelValues("ev").Set(bLevel.EvBatteryLevel)
+
 			// Fetch current EVSE config
-			resp, err := http.Get(fmt.Sprintf("http://%s/config", *openEVSEAddr))
+			evConfigResp, err := evseClient.GetConfig()
 			if err != nil {
 				log.Fatal(err)
 			}
-
-			var evConfigResp struct {
-				ChargeMode string `json:"charge_mode"`
-			}
-			if err := json.NewDecoder(resp.Body).Decode(&evConfigResp); err != nil {
-				log.Fatal(err)
-			}
-			_ = resp.Body.Close()
-
-			log.Printf("%+v", evConfigResp)
 
 			if *dryRun {
 				return
@@ -120,20 +120,20 @@ func main() {
 
 			if bLevel.EvBatteryLevel < 50 && evConfigResp.ChargeMode != "fast" {
 				log.Println("Charge level too low - disabling PV divert")
-				resp, err = http.Post(fmt.Sprintf("http://%s/config", *openEVSEAddr), "application/json", strings.NewReader(`{"charge_mode": "fast"}`))
-				if err != nil {
+				if err := evseClient.SetConfig(EVSEConfig{
+					ChargeMode: "fast",
+				}); err != nil {
 					log.Fatal(err)
 				}
-				_ = resp.Body.Close()
 			}
 
 			if bLevel.EvBatteryLevel > 60 && evConfigResp.ChargeMode != "eco" {
 				log.Println("Charge level high enough - switch to PV divert")
-				resp, err = http.Post(fmt.Sprintf("http://%s/config", *openEVSEAddr), "application/json", strings.NewReader(`{"charge_mode": "eco"}`))
-				if err != nil {
+				if err := evseClient.SetConfig(EVSEConfig{
+					ChargeMode: "eco",
+				}); err != nil {
 					log.Fatal(err)
 				}
-				_ = resp.Body.Close()
 			}
 		}).Wait()
 	}
@@ -161,27 +161,10 @@ func main() {
 			log.Fatal(err)
 		}
 
-		if *openEVSEAddr != "" {
-			resp, err := http.Get(fmt.Sprintf("http://%s/status", *openEVSEAddr))
-			if err != nil {
+		if evseClient != nil {
+			if _, err := evseClient.GetStatus(); err != nil {
 				log.Fatal(err)
 			}
-
-			var evStatusResp struct {
-				MilliAmp int64   `json:"amp"`
-				Pilot    int64   `json:"pilot"`
-				Voltage  int64   `json:"voltage"`
-				WattHour float64 `json:"watthour"`
-				WattSec  float64 `json:"wattsec"`
-			}
-			if err := json.NewDecoder(resp.Body).Decode(&evStatusResp); err != nil {
-				log.Fatal(err)
-			}
-			_ = resp.Body.Close()
-
-			log.Printf("%+v", evStatusResp)
-			powerGauge.WithLabelValues("ev").Set(float64(evStatusResp.Voltage*evStatusResp.MilliAmp) / 1000)
-			energyImportedGauge.WithLabelValues("ev").Set(float64(evStatusResp.WattHour) + float64(evStatusResp.WattSec)/3600.0)
 		}
 
 		<-ticker.C
