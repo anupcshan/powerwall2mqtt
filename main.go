@@ -44,6 +44,12 @@ func main() {
 		Help:      "Battery level percentage (0-100)",
 	}, labels)
 
+	currentGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "energy",
+		Name:      "instantaneous_current",
+		Help:      "Instantaneous current of individual CT clamps (A)",
+	}, labels)
+
 	energyExportedGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "energy",
 		Name:      "energy_exported",
@@ -62,7 +68,20 @@ func main() {
 		Help:      "Instantaneous power of individual CT clamps (W)",
 	}, labels)
 
-	prometheus.MustRegister(batteryLevelGauge, energyExportedGauge, energyImportedGauge, powerGauge)
+	tempGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "energy",
+		Name:      "temp",
+		Help:      "Temperature sensor reading (°C)",
+	}, labels)
+
+	prometheus.MustRegister(
+		batteryLevelGauge,
+		currentGauge,
+		energyExportedGauge,
+		energyImportedGauge,
+		powerGauge,
+		tempGauge,
+	)
 
 	teslaClient := NewTEGClient(*powerwallIP, *password, batteryLevelGauge, energyExportedGauge, energyImportedGauge, powerGauge)
 	if err := teslaClient.Login(); err != nil {
@@ -90,8 +109,10 @@ func main() {
 	if *openEVSEAddr != "" {
 		evseClient = &openEVSEClient{
 			openEVSEAddr:        *openEVSEAddr,
+			currentGauge:        currentGauge,
 			energyImportedGauge: energyImportedGauge,
 			powerGauge:          powerGauge,
+			tempGauge:           tempGauge,
 		}
 	}
 

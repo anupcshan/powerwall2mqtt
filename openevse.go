@@ -13,8 +13,10 @@ import (
 
 type openEVSEClient struct {
 	openEVSEAddr        string
+	currentGauge        *prometheus.GaugeVec
 	energyImportedGauge *prometheus.GaugeVec
 	powerGauge          *prometheus.GaugeVec
+	tempGauge           *prometheus.GaugeVec
 }
 
 type EVSEConfig struct {
@@ -23,6 +25,7 @@ type EVSEConfig struct {
 
 type EVSEStatus struct {
 	MilliAmp int64   `json:"amp"`
+	Temp     int64   `json:"temp"`
 	Pilot    int64   `json:"pilot"`
 	Voltage  int64   `json:"voltage"`
 	WattHour float64 `json:"watthour"`
@@ -77,8 +80,10 @@ func (c *openEVSEClient) GetStatus() (*EVSEStatus, error) {
 	_ = resp.Body.Close()
 
 	log.Printf("%+v", evStatusResp)
-	c.powerGauge.WithLabelValues("ev").Set(float64(evStatusResp.Voltage*evStatusResp.MilliAmp) / 1000)
+	c.currentGauge.WithLabelValues("ev").Set(float64(evStatusResp.MilliAmp) / 1000)
 	c.energyImportedGauge.WithLabelValues("ev").Set(float64(evStatusResp.WattHour) + float64(evStatusResp.WattSec)/3600.0)
+	c.powerGauge.WithLabelValues("ev").Set(float64(evStatusResp.Voltage*evStatusResp.MilliAmp) / 1000)
+	c.tempGauge.WithLabelValues("ev").Set(float64(evStatusResp.Temp) / 10)
 
 	return &evStatusResp, nil
 }
