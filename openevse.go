@@ -12,6 +12,7 @@ import (
 )
 
 type openEVSEClient struct {
+	client              *http.Client
 	openEVSEAddr        string
 	currentGauge        *prometheus.GaugeVec
 	energyImportedGauge *prometheus.GaugeVec
@@ -34,7 +35,7 @@ type EVSEStatus struct {
 
 func (c *openEVSEClient) GetConfig() (*EVSEConfig, error) {
 	// Fetch current EVSE config
-	resp, err := http.Get(fmt.Sprintf("http://%s/config", c.openEVSEAddr))
+	resp, err := c.client.Get(fmt.Sprintf("http://%s/config", c.openEVSEAddr))
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +57,7 @@ func (c *openEVSEClient) SetConfig(cfg EVSEConfig) error {
 	if err := json.NewEncoder(&buf).Encode(cfg); err != nil {
 		return err
 	}
-	resp, err := http.Post(fmt.Sprintf("http://%s/config", c.openEVSEAddr), "application/json", &buf)
+	resp, err := c.client.Post(fmt.Sprintf("http://%s/config", c.openEVSEAddr), "application/json", &buf)
 	if err != nil {
 		return err
 	}
@@ -67,7 +68,7 @@ func (c *openEVSEClient) SetConfig(cfg EVSEConfig) error {
 }
 
 func (c *openEVSEClient) GetStatus() (*EVSEStatus, error) {
-	resp, err := http.Get(fmt.Sprintf("http://%s/status", c.openEVSEAddr))
+	resp, err := c.client.Get(fmt.Sprintf("http://%s/status", c.openEVSEAddr))
 	if err != nil {
 		return nil, err
 	}

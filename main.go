@@ -108,6 +108,8 @@ func main() {
 	var evseClient *openEVSEClient
 	if *openEVSEAddr != "" {
 		evseClient = &openEVSEClient{
+			// Nearly all requests should complete in <100ms.
+			client:              &http.Client{Timeout: 2 * time.Second},
 			openEVSEAddr:        *openEVSEAddr,
 			currentGauge:        currentGauge,
 			energyImportedGauge: energyImportedGauge,
@@ -132,7 +134,9 @@ func main() {
 			// Fetch current EVSE config
 			evConfigResp, err := evseClient.GetConfig()
 			if err != nil {
-				log.Fatal(err)
+				// Can happen if OpenEVSE device is down for a while - log it and continue operating
+				log.Printf("Error getting config from OpenEVSE: %v", err)
+				return
 			}
 
 			if *dryRun {
@@ -184,7 +188,8 @@ func main() {
 
 		if evseClient != nil {
 			if _, err := evseClient.GetStatus(); err != nil {
-				log.Fatal(err)
+				// Can happen if OpenEVSE device is down for a while - log it and continue operating
+				log.Printf("Error getting status from OpenEVSE: %v", err)
 			}
 		}
 
