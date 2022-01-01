@@ -74,6 +74,12 @@ func main() {
 		Help:      "Temperature sensor reading (°C)",
 	}, labels)
 
+	vehicleGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "energy",
+		Name:      "vehicle",
+		Help:      "Is Vehicle connected (1 for yes, 0 otherwise)",
+	}, labels)
+
 	prometheus.MustRegister(
 		batteryLevelGauge,
 		currentGauge,
@@ -81,6 +87,7 @@ func main() {
 		energyImportedGauge,
 		powerGauge,
 		tempGauge,
+		vehicleGauge,
 	)
 
 	teslaClient := NewTEGClient(*powerwallIP, *password, batteryLevelGauge, energyExportedGauge, energyImportedGauge, powerGauge)
@@ -115,6 +122,7 @@ func main() {
 			energyImportedGauge: energyImportedGauge,
 			powerGauge:          powerGauge,
 			tempGauge:           tempGauge,
+			vehicleGauge:        vehicleGauge,
 		}
 	}
 
