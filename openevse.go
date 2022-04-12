@@ -18,7 +18,7 @@ type openEVSEClient struct {
 	energyImportedGauge *prometheus.GaugeVec
 	powerGauge          *prometheus.GaugeVec
 	tempGauge           *prometheus.GaugeVec
-	vehicleGauge        *prometheus.GaugeVec
+	connectedGauge      *prometheus.GaugeVec
 }
 
 type EVSEConfig struct {
@@ -26,13 +26,14 @@ type EVSEConfig struct {
 }
 
 type EVSEStatus struct {
-	MilliAmp int64   `json:"amp"`
-	Temp     int64   `json:"temp"`
-	Pilot    int64   `json:"pilot"`
-	Voltage  int64   `json:"voltage"`
-	WattHour float64 `json:"watthour"`
-	WattSec  float64 `json:"wattsec"`
-	Vehicle  int64   `json:"vehicle"`
+	MilliAmp      int64   `json:"amp"`
+	Temp          int64   `json:"temp"`
+	Pilot         int64   `json:"pilot"`
+	Voltage       int64   `json:"voltage"`
+	WattHour      float64 `json:"watthour"`
+	WattSec       float64 `json:"wattsec"`
+	Vehicle       int64   `json:"vehicle"`
+	MQTTConnected int64   `json:"mqtt_connected"`
 }
 
 func (c *openEVSEClient) GetConfig() (*EVSEConfig, error) {
@@ -87,7 +88,8 @@ func (c *openEVSEClient) GetStatus() (*EVSEStatus, error) {
 	c.energyImportedGauge.WithLabelValues("ev").Set(float64(evStatusResp.WattHour) + float64(evStatusResp.WattSec)/3600.0)
 	c.powerGauge.WithLabelValues("ev").Set(float64(evStatusResp.Voltage*evStatusResp.MilliAmp) / 1000)
 	c.tempGauge.WithLabelValues("ev").Set(float64(evStatusResp.Temp) / 10)
-	c.vehicleGauge.WithLabelValues("ev").Set(float64(evStatusResp.Vehicle))
+	c.connectedGauge.WithLabelValues("ev").Set(float64(evStatusResp.Vehicle))
+	c.connectedGauge.WithLabelValues("mqtt").Set(float64(evStatusResp.MQTTConnected))
 
 	return &evStatusResp, nil
 }
