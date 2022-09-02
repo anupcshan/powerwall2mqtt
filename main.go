@@ -80,6 +80,12 @@ func main() {
 		Help:      "Is entity (ev, mqtt, etc) connected (1 for yes, 0 otherwise)",
 	}, labels)
 
+	gridServicesEnabledGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "energy",
+		Name:      "grid_services_enabled",
+		Help:      "Is Powerwall feeding grid in VPP event?",
+	}, labels)
+
 	prometheus.MustRegister(
 		batteryLevelGauge,
 		currentGauge,
@@ -88,9 +94,10 @@ func main() {
 		powerGauge,
 		tempGauge,
 		connectedGauge,
+		gridServicesEnabledGauge,
 	)
 
-	teslaClient := NewTEGClient(*powerwallIP, *password, batteryLevelGauge, energyExportedGauge, energyImportedGauge, powerGauge)
+	teslaClient := NewTEGClient(*powerwallIP, *password, batteryLevelGauge, energyExportedGauge, energyImportedGauge, powerGauge, gridServicesEnabledGauge)
 	if err := teslaClient.Login(); err != nil {
 		log.Fatal(err)
 	}
@@ -172,20 +179,30 @@ func main() {
 	}
 
 	for {
+		gridStatus, err := teslaClient.GetGridStatus()
+		if err != nil {
+			log.Fatal(err)
+		}
+
 		metersResp, err := teslaClient.GetMeterAggregates()
 		if err != nil {
 			log.Fatal(err)
 		}
 
 		if v, ok := metersResp["site"]; ok {
+			availablePower := -v.InstantPower
+			if gridStatus.GridServicesActive {
+				availablePower = 0
+			}
+
 			if !*dryRun {
-				token := mqttClient.Publish(*gridPowerInverseTopic, 0, false, fmt.Sprintf("%f", -v.InstantPower))
+				token := mqttClient.Publish(*gridPowerInverseTopic, 0, false, fmt.Sprintf("%f", availablePower))
 				_ = token.Wait()
 				if err := token.Error(); err != nil {
 					log.Fatal(err)
 				}
 			} else {
-				log.Printf("[DRY RUN] Sending %f on %s", -v.InstantPower, *gridPowerInverseTopic)
+				log.Printf("[DRY RUN] Sending %f on %s", availablePower, *gridPowerInverseTopic)
 			}
 		}
 

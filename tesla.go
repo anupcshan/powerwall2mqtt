@@ -15,13 +15,14 @@ import (
 )
 
 type teslaClient struct {
-	client              *http.Client
-	gatewayAddr         string
-	password            string
-	batteryLevelGauge   *prometheus.GaugeVec
-	energyExportedGauge *prometheus.GaugeVec
-	energyImportedGauge *prometheus.GaugeVec
-	powerGauge          *prometheus.GaugeVec
+	client                   *http.Client
+	gatewayAddr              string
+	password                 string
+	batteryLevelGauge        *prometheus.GaugeVec
+	energyExportedGauge      *prometheus.GaugeVec
+	energyImportedGauge      *prometheus.GaugeVec
+	gridServicesEnabledGauge *prometheus.GaugeVec
+	powerGauge               *prometheus.GaugeVec
 }
 
 func newHTTPClient() *http.Client {
@@ -37,15 +38,16 @@ func newHTTPClient() *http.Client {
 }
 
 func NewTEGClient(gatewayAddr string, password string,
-	batteryLevelGauge, energyExportedGauge, energyImportedGauge, powerGauge *prometheus.GaugeVec,
+	batteryLevelGauge, energyExportedGauge, energyImportedGauge, powerGauge, gridServicesEnabledGauge *prometheus.GaugeVec,
 ) *teslaClient {
 	return &teslaClient{
-		gatewayAddr:         gatewayAddr,
-		password:            password,
-		batteryLevelGauge:   batteryLevelGauge,
-		energyExportedGauge: energyExportedGauge,
-		energyImportedGauge: energyImportedGauge,
-		powerGauge:          powerGauge,
+		gatewayAddr:              gatewayAddr,
+		password:                 password,
+		batteryLevelGauge:        batteryLevelGauge,
+		energyExportedGauge:      energyExportedGauge,
+		energyImportedGauge:      energyImportedGauge,
+		powerGauge:               powerGauge,
+		gridServicesEnabledGauge: gridServicesEnabledGauge,
 	}
 }
 
@@ -132,4 +134,31 @@ func (c *teslaClient) GetStateOfEnergy() (*Soe, error) {
 	c.batteryLevelGauge.WithLabelValues("powerwall").Set(soeResp.Percentage)
 
 	return &soeResp, nil
+}
+
+type GridStatus struct {
+	GridServicesActive bool `json:"grid_services_active"`
+}
+
+func (c *teslaClient) GetGridStatus() (*GridStatus, error) {
+	resp, err := c.client.Get(fmt.Sprintf("https://%s/api/system_status/grid_status", c.gatewayAddr))
+	if err != nil {
+		return nil, err
+	}
+
+	var gridStatusResp GridStatus
+	if err := json.NewDecoder(resp.Body).Decode(&gridStatusResp); err != nil {
+		return nil, err
+	}
+	_ = resp.Body.Close()
+
+	log.Printf("%+v", gridStatusResp)
+
+	var val float64 = 0
+	if gridStatusResp.GridServicesActive {
+		val = 1
+	}
+	c.gridServicesEnabledGauge.WithLabelValues("powerwall").Set(val)
+
+	return &gridStatusResp, nil
 }
