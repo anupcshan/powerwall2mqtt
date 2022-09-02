@@ -164,3 +164,21 @@ func (c *teslaClient) GetGridStatus() (*GridStatus, error) {
 	}
 	return &gridStatusResp, nil
 }
+
+type Operation struct {
+	BackupReservePercent float64 `json:"backup_reserve_percent"`
+}
+
+func (c *teslaClient) GetOperation() (*Operation, error) {
+	var operation Operation
+	err := getAPI(c, "/api/operation", &operation,
+		func() {
+			c.batteryLevelGauge.WithLabelValues("powerwall-reserve").Set(operation.BackupReservePercent)
+		},
+	)
+
+	if err != nil {
+		return nil, err
+	}
+	return &operation, nil
+}

@@ -211,6 +211,11 @@ func main() {
 			log.Fatal(err)
 		}
 
+		_, err = teslaClient.GetOperation()
+		if err != nil {
+			log.Fatal(err)
+		}
+
 		if evseClient != nil {
 			if _, err := evseClient.GetStatus(); err != nil {
 				// Can happen if OpenEVSE device is down for a while - log it and continue operating
