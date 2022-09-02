@@ -85,6 +85,22 @@ func (c *teslaClient) Login() error {
 	return nil
 }
 
+func getAPI[T any](c *teslaClient, path string, result T, reportMetrics func()) error {
+	resp, err := c.client.Get(fmt.Sprintf("https://%s%s", c.gatewayAddr, path))
+	if err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
+	if err := json.NewDecoder(resp.Body).Decode(result); err != nil {
+		return err
+	}
+
+	log.Printf("%+v", result)
+	reportMetrics()
+	return nil
+}
+
 type Meters map[string]struct {
 	InstantPower   float64 `json:"instant_power"`
 	EnergyExported float64 `json:"energy_exported"`
@@ -92,25 +108,20 @@ type Meters map[string]struct {
 }
 
 func (c *teslaClient) GetMeterAggregates() (Meters, error) {
-	resp, err := c.client.Get(fmt.Sprintf("https://%s/api/meters/aggregates", c.gatewayAddr))
+	var metersResp Meters
+	err := getAPI(c, "/api/meters/aggregates", &metersResp,
+		func() {
+			for label, v := range metersResp {
+				c.energyExportedGauge.WithLabelValues(label).Set(v.EnergyExported)
+				c.energyImportedGauge.WithLabelValues(label).Set(v.EnergyImported)
+				c.powerGauge.WithLabelValues(label).Set(v.InstantPower)
+			}
+		},
+	)
+
 	if err != nil {
 		return nil, err
 	}
-
-	var metersResp Meters
-	if err := json.NewDecoder(resp.Body).Decode(&metersResp); err != nil {
-		return nil, err
-	}
-	_ = resp.Body.Close()
-
-	log.Printf("%+v", metersResp)
-
-	for label, v := range metersResp {
-		c.energyExportedGauge.WithLabelValues(label).Set(v.EnergyExported)
-		c.energyImportedGauge.WithLabelValues(label).Set(v.EnergyImported)
-		c.powerGauge.WithLabelValues(label).Set(v.InstantPower)
-	}
-
 	return metersResp, nil
 }
 
@@ -119,20 +130,16 @@ type Soe struct {
 }
 
 func (c *teslaClient) GetStateOfEnergy() (*Soe, error) {
-	resp, err := c.client.Get(fmt.Sprintf("https://%s/api/system_status/soe", c.gatewayAddr))
+	var soeResp Soe
+	err := getAPI(c, "/api/system_status/soe", &soeResp,
+		func() {
+			c.batteryLevelGauge.WithLabelValues("powerwall").Set(soeResp.Percentage)
+		},
+	)
+
 	if err != nil {
 		return nil, err
 	}
-
-	var soeResp Soe
-	if err := json.NewDecoder(resp.Body).Decode(&soeResp); err != nil {
-		return nil, err
-	}
-	_ = resp.Body.Close()
-
-	log.Printf("%+v", soeResp)
-	c.batteryLevelGauge.WithLabelValues("powerwall").Set(soeResp.Percentage)
-
 	return &soeResp, nil
 }
 
@@ -141,24 +148,19 @@ type GridStatus struct {
 }
 
 func (c *teslaClient) GetGridStatus() (*GridStatus, error) {
-	resp, err := c.client.Get(fmt.Sprintf("https://%s/api/system_status/grid_status", c.gatewayAddr))
+	var gridStatusResp GridStatus
+	err := getAPI(c, "/api/system_status/grid_status", &gridStatusResp,
+		func() {
+			var val float64 = 0
+			if gridStatusResp.GridServicesActive {
+				val = 1
+			}
+			c.gridServicesEnabledGauge.WithLabelValues("powerwall").Set(val)
+		},
+	)
+
 	if err != nil {
 		return nil, err
 	}
-
-	var gridStatusResp GridStatus
-	if err := json.NewDecoder(resp.Body).Decode(&gridStatusResp); err != nil {
-		return nil, err
-	}
-	_ = resp.Body.Close()
-
-	log.Printf("%+v", gridStatusResp)
-
-	var val float64 = 0
-	if gridStatusResp.GridServicesActive {
-		val = 1
-	}
-	c.gridServicesEnabledGauge.WithLabelValues("powerwall").Set(val)
-
 	return &gridStatusResp, nil
 }
