@@ -133,6 +133,35 @@ func main() {
 		}
 	}
 
+	cont := NewController(
+		func(limit float64) error {
+			if *dryRun {
+				log.Printf("[DRY RUN] Setting eco power limit to %f", limit)
+				return nil
+			} else {
+				token := mqttClient.Publish(*gridPowerInverseTopic, 0, false, fmt.Sprintf("%f", limit))
+				_ = token.Wait()
+				return token.Error()
+			}
+		}, func(mode chargeMode) error {
+			if *dryRun {
+				log.Printf("[DRY RUN] Setting charge mode to %v", mode)
+				return nil
+			} else {
+				modeStr := "fast"
+				switch mode {
+				case chargeModeEco:
+					modeStr = "eco"
+				case chargeModeFast:
+					modeStr = "fast"
+				}
+				return evseClient.SetConfig(EVSEConfig{
+					ChargeMode: modeStr,
+				})
+			}
+		},
+	)
+
 	if *evChargeLevelTopic != "" && evseClient != nil {
 		mqttClient.Subscribe(*evChargeLevelTopic, 1, func(_ mqtt.Client, msg mqtt.Message) {
 			log.Printf("Got message: %s", msg.Payload())
@@ -145,6 +174,7 @@ func main() {
 			}
 
 			batteryLevelGauge.WithLabelValues("ev").Set(bLevel.EvBatteryLevel)
+			cont.SetEVBatteryLevelPercent(bLevel.EvBatteryLevel)
 
 			// Fetch current EVSE config
 			evConfigResp, err := evseClient.GetConfig()
@@ -154,29 +184,25 @@ func main() {
 				return
 			}
 
-			if *dryRun {
+			var mode chargeMode
+			switch evConfigResp.ChargeMode {
+			case "eco":
+				mode = chargeModeEco
+			case "fast":
+				mode = chargeModeFast
+			default:
+				log.Printf("Unknown charge mode %s", evConfigResp.ChargeMode)
 				return
 			}
-
-			if bLevel.EvBatteryLevel < 50 && evConfigResp.ChargeMode != "fast" {
-				log.Println("Charge level too low - disabling PV divert")
-				if err := evseClient.SetConfig(EVSEConfig{
-					ChargeMode: "fast",
-				}); err != nil {
-					log.Fatal(err)
-				}
-			}
-
-			if bLevel.EvBatteryLevel > 60 && evConfigResp.ChargeMode != "eco" {
-				log.Println("Charge level high enough - switch to PV divert")
-				if err := evseClient.SetConfig(EVSEConfig{
-					ChargeMode: "eco",
-				}); err != nil {
-					log.Fatal(err)
-				}
-			}
+			cont.SetCurrentChargeMode(mode)
 		}).Wait()
 	}
+
+	go func() {
+		if err := cont.Loop(); err != nil {
+			log.Fatal(err)
+		}
+	}()
 
 	for {
 		gridStatus, err := teslaClient.GetGridStatus()
@@ -184,26 +210,17 @@ func main() {
 			log.Fatal(err)
 		}
 
+		cont.SetLoadReduction(gridStatus.GridServicesActive)
+
 		metersResp, err := teslaClient.GetMeterAggregates()
 		if err != nil {
 			log.Fatal(err)
 		}
 
 		if v, ok := metersResp["site"]; ok {
-			availablePower := -v.InstantPower
-			if gridStatus.GridServicesActive {
-				availablePower = 0
-			}
-
-			if !*dryRun {
-				token := mqttClient.Publish(*gridPowerInverseTopic, 0, false, fmt.Sprintf("%f", availablePower))
-				_ = token.Wait()
-				if err := token.Error(); err != nil {
-					log.Fatal(err)
-				}
-			} else {
-				log.Printf("[DRY RUN] Sending %f on %s", availablePower, *gridPowerInverseTopic)
-			}
+			cont.SetExportedSolarKW(-v.InstantPower)
+		} else {
+			cont.SetExportedSolarKW(0)
 		}
 
 		_, err = teslaClient.GetStateOfEnergy()
