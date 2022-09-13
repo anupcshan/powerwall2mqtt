@@ -8,15 +8,17 @@ import (
 type strategy int
 
 const (
-	strategyAuto strategy = iota
-	strategyMaxSpeed
+	strategyUnknown strategy = iota
+	strategyAuto
+	strategyFullSpeed
 )
 
 type chargeMode int
 
 const (
-	chargeModeEco  chargeMode = iota // Charge based on eco power limit
-	chargeModeFast                   // Full speed
+	chargeModeUnknown chargeMode = iota
+	chargeModeEco                // Charge based on eco power limit
+	chargeModeFast               // Full speed
 )
 
 type observedValues int
@@ -26,6 +28,7 @@ const (
 	observedSolar
 	observedLR
 	observedChargeMode
+	observedStrategy
 )
 
 type controller struct {
@@ -87,6 +90,10 @@ func (c *controller) SetCurrentChargeMode(mode chargeMode) {
 	updateSensor(c, &c.currentChargeMode, mode, observedChargeMode)
 }
 
+func (c *controller) SetControllerStrategy(strategy strategy) {
+	updateSensor(c, &c.controllerStrategy, strategy, observedStrategy)
+}
+
 func (c *controller) seen(checks ...observedValues) bool {
 	for _, check := range checks {
 		if c.seenValues&check != check {
@@ -103,6 +110,21 @@ func (c *controller) singleLoop() error {
 
 	defer c.lock.Unlock()
 
+	if !c.seen(observedStrategy, observedChargeMode) {
+		// Not enough data to make informed choices - try again when we have more data.
+		return nil
+	}
+
+	if c.controllerStrategy == strategyFullSpeed {
+		if c.currentChargeMode != chargeModeFast {
+			log.Println("Switching to Fast mode on manual override")
+			if err := c.setChargeMode(chargeModeFast); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
 	// Load reduction is fairly high priority - it usually means bad weather (heatwave or storm).
 	// Don't try to charge during this time.
 	// It is up to the operator to manually charge at full speed before we're in bad weather.
@@ -111,7 +133,7 @@ func (c *controller) singleLoop() error {
 		if err := c.setEcoPowerLimit(0); err != nil {
 			return err
 		}
-		if c.seen(observedChargeMode) && c.currentChargeMode != chargeModeEco {
+		if c.currentChargeMode != chargeModeEco {
 			log.Println("Load reduction enabled - forcing Eco mode")
 			if err := c.setChargeMode(chargeModeEco); err != nil {
 				return err
@@ -121,7 +143,7 @@ func (c *controller) singleLoop() error {
 		return nil
 	}
 
-	if c.seen(observedChargeMode, observedBattery) {
+	if c.seen(observedBattery) {
 		if c.evBatteryLevelPercent < 50 && c.currentChargeMode != chargeModeFast {
 			log.Println("Charge level too low - disabling Eco mode")
 			if err := c.setChargeMode(chargeModeFast); err != nil {

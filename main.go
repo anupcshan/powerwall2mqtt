@@ -27,6 +27,7 @@ func main() {
 	listen := flag.String("listen", ":9900", "Listen address for Prometheus handler")
 	dryRun := flag.Bool("dry-run", true, "Dry run mode (disable any writes in dry run mode)")
 	evChargeLevelTopic := flag.String("ev-charge-level-topic", "", "MQTT topic with the most recently polled EV charge level (from onstar2mqtt)")
+	evChargeStrategyTopic := flag.String("ev-charge-strategy-topic", "", "MQTT topic to read/write the current charge strategy")
 
 	flag.Parse()
 
@@ -175,6 +176,23 @@ func main() {
 
 			batteryLevelGauge.WithLabelValues("ev").Set(bLevel.EvBatteryLevel)
 			cont.SetEVBatteryLevelPercent(bLevel.EvBatteryLevel)
+		}).Wait()
+	}
+
+	if *evChargeStrategyTopic != "" {
+		mqttClient.Subscribe(*evChargeStrategyTopic, 1, func(_ mqtt.Client, msg mqtt.Message) {
+			log.Printf("Got message: %s", msg.Payload())
+
+			var strategy strategy
+			switch string(msg.Payload()) {
+			case "auto":
+				strategy = strategyAuto
+			case "fullspeed":
+				strategy = strategyFullSpeed
+			default:
+				log.Fatalf("Charge strategy %s unknown", msg.Payload())
+			}
+			cont.SetControllerStrategy(strategy)
 		}).Wait()
 	}
 
