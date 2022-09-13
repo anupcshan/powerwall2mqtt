@@ -162,7 +162,7 @@ func main() {
 		},
 	)
 
-	if *evChargeLevelTopic != "" && evseClient != nil {
+	if *evChargeLevelTopic != "" {
 		mqttClient.Subscribe(*evChargeLevelTopic, 1, func(_ mqtt.Client, msg mqtt.Message) {
 			log.Printf("Got message: %s", msg.Payload())
 			var bLevel struct {
@@ -175,26 +175,6 @@ func main() {
 
 			batteryLevelGauge.WithLabelValues("ev").Set(bLevel.EvBatteryLevel)
 			cont.SetEVBatteryLevelPercent(bLevel.EvBatteryLevel)
-
-			// Fetch current EVSE config
-			evConfigResp, err := evseClient.GetConfig()
-			if err != nil {
-				// Can happen if OpenEVSE device is down for a while - log it and continue operating
-				log.Printf("Error getting config from OpenEVSE: %v", err)
-				return
-			}
-
-			var mode chargeMode
-			switch evConfigResp.ChargeMode {
-			case "eco":
-				mode = chargeModeEco
-			case "fast":
-				mode = chargeModeFast
-			default:
-				log.Printf("Unknown charge mode %s", evConfigResp.ChargeMode)
-				return
-			}
-			cont.SetCurrentChargeMode(mode)
 		}).Wait()
 	}
 
@@ -237,6 +217,26 @@ func main() {
 			if _, err := evseClient.GetStatus(); err != nil {
 				// Can happen if OpenEVSE device is down for a while - log it and continue operating
 				log.Printf("Error getting status from OpenEVSE: %v", err)
+			}
+
+			// Fetch current EVSE config
+			evConfigResp, err := evseClient.GetConfig()
+			if err != nil {
+				// Can happen if OpenEVSE device is down for a while - log it and continue operating
+				log.Printf("Error getting config from OpenEVSE: %v", err)
+				return
+			} else {
+				var mode chargeMode
+				switch evConfigResp.ChargeMode {
+				case "eco":
+					mode = chargeModeEco
+				case "fast":
+					mode = chargeModeFast
+				default:
+					log.Printf("Unknown charge mode %s", evConfigResp.ChargeMode)
+					return
+				}
+				cont.SetCurrentChargeMode(mode)
 			}
 		}
 
