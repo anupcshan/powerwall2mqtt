@@ -242,7 +242,6 @@ func main() {
 			if err != nil {
 				// Can happen if OpenEVSE device is down for a while - log it and continue operating
 				log.Printf("Error getting config from OpenEVSE: %v", err)
-				return
 			} else {
 				var mode chargeMode
 				switch evConfigResp.ChargeMode {
