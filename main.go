@@ -216,9 +216,9 @@ func main() {
 		}
 
 		if v, ok := metersResp["site"]; ok {
-			cont.SetExportedSolarKW(-v.InstantPower)
+			cont.SetExportedSolarW(-v.InstantPower)
 		} else {
-			cont.SetExportedSolarKW(0)
+			cont.SetExportedSolarW(0)
 		}
 
 		_, err = teslaClient.GetStateOfEnergy()
@@ -232,9 +232,12 @@ func main() {
 		}
 
 		if evseClient != nil {
-			if _, err := evseClient.GetStatus(); err != nil {
+			evseStatus, err := evseClient.GetStatus()
+			if err != nil {
 				// Can happen if OpenEVSE device is down for a while - log it and continue operating
 				log.Printf("Error getting status from OpenEVSE: %v", err)
+			} else {
+				cont.SetEVSETempDeciCelsius(evseStatus.Temp)
 			}
 
 			// Fetch current EVSE config
