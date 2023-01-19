@@ -35,7 +35,7 @@ const (
 
 const (
 	maxAmps = 40
-	minAmps = 6
+	minAmps = 8
 	volts   = 240
 	maxTemp = 450 // 45°C
 )
