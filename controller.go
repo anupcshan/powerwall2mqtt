@@ -34,10 +34,11 @@ const (
 )
 
 const (
-	maxAmps = 40
-	minAmps = 8
-	volts   = 240
-	maxTemp = 450 // 45°C
+	maxAmps       = 40
+	minAmps       = 8
+	volts         = 240
+	maxTemp       = 450     // 45°C
+	minSitePowerW = -100000 // 100kW. Don't expect single home to pull more than this from the grid.
 )
 
 type controller struct {
@@ -121,7 +122,7 @@ func (c *controller) seen(checks ...observedValues) bool {
 func (c *controller) computeMaxPower() (int32, string) {
 	if !c.seen(observedStrategy, observedChargeMode) {
 		// Not enough data to make informed choices - try again when we have more data.
-		return -1, "not enough data"
+		return math.MinInt32, "not enough data"
 	}
 
 	var maxPower int32 = math.MaxInt32
@@ -174,7 +175,7 @@ func (c *controller) singleLoop() error {
 
 	maxPower, reason := c.computeMaxPower()
 
-	if maxPower < 0 {
+	if maxPower < minSitePowerW {
 		// Not enough data. Don't take action
 		return nil
 	}
