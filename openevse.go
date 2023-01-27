@@ -1,10 +1,8 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 
@@ -21,10 +19,6 @@ type openEVSEClient struct {
 	connectedGauge      *prometheus.GaugeVec
 }
 
-type EVSEConfig struct {
-	ChargeMode string `json:"charge_mode"`
-}
-
 type EVSEStatus struct {
 	MilliAmp      int64   `json:"amp"`
 	Temp          int64   `json:"temp"`
@@ -34,40 +28,6 @@ type EVSEStatus struct {
 	WattSec       float64 `json:"wattsec"`
 	Vehicle       int64   `json:"vehicle"`
 	MQTTConnected int64   `json:"mqtt_connected"`
-}
-
-func (c *openEVSEClient) GetConfig() (*EVSEConfig, error) {
-	// Fetch current EVSE config
-	resp, err := c.client.Get(fmt.Sprintf("http://%s/config", c.openEVSEAddr))
-	if err != nil {
-		return nil, err
-	}
-
-	var evConfigResp EVSEConfig
-
-	if err := json.NewDecoder(resp.Body).Decode(&evConfigResp); err != nil {
-		return nil, err
-	}
-	_ = resp.Body.Close()
-
-	log.Printf("%+v", evConfigResp)
-
-	return &evConfigResp, nil
-}
-
-func (c *openEVSEClient) SetConfig(cfg EVSEConfig) error {
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(cfg); err != nil {
-		return err
-	}
-	resp, err := c.client.Post(fmt.Sprintf("http://%s/config", c.openEVSEAddr), "application/json", &buf)
-	if err != nil {
-		return err
-	}
-
-	io.Copy(io.Discard, resp.Body)
-	_ = resp.Body.Close()
-	return nil
 }
 
 func (c *openEVSEClient) GetStatus() (*EVSEStatus, error) {

@@ -144,22 +144,6 @@ func main() {
 				_ = token.Wait()
 				return token.Error()
 			}
-		}, func(mode chargeMode) error {
-			if *dryRun {
-				log.Printf("[DRY RUN] Setting charge mode to %v", mode)
-				return nil
-			} else {
-				modeStr := "fast"
-				switch mode {
-				case chargeModeEco:
-					modeStr = "eco"
-				case chargeModeFast:
-					modeStr = "fast"
-				}
-				return evseClient.SetConfig(EVSEConfig{
-					ChargeMode: modeStr,
-				})
-			}
 		},
 	)
 
@@ -238,25 +222,6 @@ func main() {
 				log.Printf("Error getting status from OpenEVSE: %v", err)
 			} else {
 				cont.SetEVSETempDeciCelsius(evseStatus.Temp)
-			}
-
-			// Fetch current EVSE config
-			evConfigResp, err := evseClient.GetConfig()
-			if err != nil {
-				// Can happen if OpenEVSE device is down for a while - log it and continue operating
-				log.Printf("Error getting config from OpenEVSE: %v", err)
-			} else {
-				var mode chargeMode
-				switch evConfigResp.ChargeMode {
-				case "eco":
-					mode = chargeModeEco
-				case "fast":
-					mode = chargeModeFast
-				default:
-					log.Printf("Unknown charge mode %s", evConfigResp.ChargeMode)
-					return
-				}
-				cont.SetCurrentChargeMode(mode)
 			}
 		}
 

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"math"
 	"sync"
 )
@@ -14,21 +13,12 @@ const (
 	strategyFullSpeed
 )
 
-type chargeMode int
-
-const (
-	chargeModeUnknown chargeMode = iota
-	chargeModeEco                // Charge based on eco power limit
-	chargeModeFast               // Full speed
-)
-
 type observedValues int
 
 const (
 	observedBattery observedValues = 1 << iota
 	observedSolar
 	observedLR
-	observedChargeMode
 	observedStrategy
 	observedTemp
 )
@@ -52,18 +42,14 @@ type controller struct {
 	tempDeciCelsius       int64
 	loadReductionEnabled  bool
 	controllerStrategy    strategy
-	currentChargeMode     chargeMode
 	setEcoPowerLimit      func(float64) error
-	setChargeMode         func(chargeMode) error
 }
 
 func NewController(
 	setEcoPowerLimit func(float64) error,
-	setChargeMode func(chargeMode) error,
 ) *controller {
 	cont := &controller{
 		setEcoPowerLimit: setEcoPowerLimit,
-		setChargeMode:    setChargeMode,
 	}
 
 	cont.cond = sync.NewCond(&cont.lock)
@@ -97,10 +83,6 @@ func (c *controller) SetLoadReduction(enabled bool) {
 	updateSensor(c, &c.loadReductionEnabled, enabled, observedLR)
 }
 
-func (c *controller) SetCurrentChargeMode(mode chargeMode) {
-	updateSensor(c, &c.currentChargeMode, mode, observedChargeMode)
-}
-
 func (c *controller) SetControllerStrategy(strategy strategy) {
 	updateSensor(c, &c.controllerStrategy, strategy, observedStrategy)
 }
@@ -119,52 +101,44 @@ func (c *controller) seen(checks ...observedValues) bool {
 	return true
 }
 
-func (c *controller) computeMaxPower() (int32, string) {
-	if !c.seen(observedStrategy, observedChargeMode) {
+func (c *controller) computeMaxPower() int32 {
+	if !c.seen(observedStrategy) {
 		// Not enough data to make informed choices - try again when we have more data.
-		return math.MinInt32, "not enough data"
+		return math.MinInt32
 	}
 
 	var maxPower int32 = math.MaxInt32
-	var reason string
 
 	if c.seen(observedTemp) && c.tempDeciCelsius > maxTemp {
 		maxPower = volts * minAmps
-		reason = "temp exceeded limit"
 	}
 
 	if c.controllerStrategy == strategyFullSpeed {
-		if reason == "" {
-			reason = "manual override"
-		}
-		return maxPower, reason
+		return maxPower
 	}
 
 	// Load reduction is fairly high priority - it usually means bad weather (heatwave or storm).
 	// Don't try to charge during this time.
 	// It is up to the operator to manually charge at full speed before we're in bad weather.
 	if c.seen(observedLR) && c.loadReductionEnabled {
-		return 0, "load reduction enabled"
+		return 0
 	}
 
 	if c.seen(observedBattery) {
 		if c.evBatteryLevelPercent < 60 {
-			if reason == "" {
-				reason = "charge level too low"
-			}
-			return maxPower, reason
+			return maxPower
 		}
 	}
 
 	if c.seen(observedSolar) {
 		if maxPower < int32(c.exportedSolarW) {
-			return maxPower, reason
+			return maxPower
 		}
 
-		return int32(c.exportedSolarW), "charge level high enough"
+		return int32(c.exportedSolarW)
 	}
 
-	return maxPower, reason
+	return maxPower
 }
 
 func (c *controller) singleLoop() error {
@@ -173,7 +147,7 @@ func (c *controller) singleLoop() error {
 
 	defer c.lock.Unlock()
 
-	maxPower, reason := c.computeMaxPower()
+	maxPower := c.computeMaxPower()
 
 	if maxPower < minSitePowerW {
 		// Not enough data. Don't take action
@@ -181,19 +155,7 @@ func (c *controller) singleLoop() error {
 	}
 
 	if maxPower > volts*maxAmps {
-		if c.currentChargeMode != chargeModeFast {
-			log.Printf("Switching to Fast mode - %s", reason)
-			return c.setChargeMode(chargeModeFast)
-		}
-
-		return nil
-	}
-
-	if c.currentChargeMode != chargeModeEco {
-		log.Printf("Switching to Eco mode - %s", reason)
-		if err := c.setChargeMode(chargeModeEco); err != nil {
-			return err
-		}
+		maxPower = volts * maxAmps
 	}
 
 	return c.setEcoPowerLimit(float64(maxPower))
