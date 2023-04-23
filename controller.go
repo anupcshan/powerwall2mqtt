@@ -27,7 +27,7 @@ const (
 	maxAmps       = 40
 	minAmps       = 8
 	volts         = 240
-	maxTemp       = 450     // 45°C
+	maxTemp       = 500     // 50°C
 	minSitePowerW = -100000 // 100kW. Don't expect single home to pull more than this from the grid.
 )
 
