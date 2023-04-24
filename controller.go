@@ -3,6 +3,7 @@ package main
 import (
 	"math"
 	"sync"
+	"time"
 )
 
 type strategy int
@@ -11,6 +12,7 @@ const (
 	strategyUnknown strategy = iota
 	strategyAuto
 	strategyFullSpeed
+	strategyOvernight
 )
 
 type observedValues int
@@ -114,6 +116,10 @@ func (c *controller) computeMaxPower() int32 {
 	}
 
 	if c.controllerStrategy == strategyFullSpeed {
+		return maxPower
+	}
+
+	if c.controllerStrategy == strategyOvernight && time.Now().Hour() < 6 /* 12AM to 6AM */ {
 		return maxPower
 	}
 

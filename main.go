@@ -173,6 +173,8 @@ func main() {
 				strategy = strategyAuto
 			case "fullspeed":
 				strategy = strategyFullSpeed
+			case "overnight":
+				strategy = strategyOvernight
 			default:
 				log.Fatalf("Charge strategy %s unknown", msg.Payload())
 			}
