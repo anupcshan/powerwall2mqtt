@@ -29,9 +29,19 @@ const (
 	maxAmps       = 40
 	minAmps       = 8
 	volts         = 240
-	maxTemp       = 500     // 50°C
 	minSitePowerW = -100000 // 100kW. Don't expect single home to pull more than this from the grid.
 )
+
+var tempClamps = []struct {
+	temp    int64
+	maxAmps int32
+}{
+	{500, 8},  // 50°C
+	{490, 12}, // 49°C
+	{480, 16}, // 48°C
+	{470, 24}, // 47°C
+	{460, 32}, // 46°C
+}
 
 type controller struct {
 	lock       sync.Mutex
@@ -103,6 +113,19 @@ func (c *controller) seen(checks ...observedValues) bool {
 	return true
 }
 
+func maxPowerForTemp(temp int64) int32 {
+	var maxPower int32 = math.MaxInt32
+
+	for _, tempClamp := range tempClamps {
+		if temp > tempClamp.temp {
+			maxPower = volts * tempClamp.maxAmps
+			return maxPower
+		}
+	}
+
+	return maxPower
+}
+
 func (c *controller) computeMaxPower() int32 {
 	if !c.seen(observedStrategy) {
 		// Not enough data to make informed choices - try again when we have more data.
@@ -111,8 +134,8 @@ func (c *controller) computeMaxPower() int32 {
 
 	var maxPower int32 = math.MaxInt32
 
-	if c.seen(observedTemp) && c.tempDeciCelsius > maxTemp {
-		maxPower = volts * minAmps
+	if c.seen(observedTemp) {
+		maxPower = maxPowerForTemp(c.tempDeciCelsius)
 	}
 
 	if c.controllerStrategy == strategyFullSpeed {
