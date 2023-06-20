@@ -223,7 +223,7 @@ func main() {
 				// Can happen if OpenEVSE device is down for a while - log it and continue operating
 				log.Printf("Error getting status from OpenEVSE: %v", err)
 			} else {
-				cont.SetEVSETempDeciCelsius(evseStatus.Temp)
+				cont.SetEVSETemp(Temperature(evseStatus.Temp) * DeciCelcius)
 			}
 		}
 

@@ -25,6 +25,13 @@ const (
 	observedTemp
 )
 
+type Temperature int64
+
+const (
+	DeciCelcius Temperature = 1
+	Celsius                 = 10 * DeciCelcius
+)
+
 const (
 	maxAmps       = 40
 	minAmps       = 8
@@ -33,14 +40,14 @@ const (
 )
 
 var tempClamps = []struct {
-	temp    int64
+	temp    Temperature
 	maxAmps int32
 }{
-	{500, 8},  // 50°C
-	{490, 12}, // 49°C
-	{480, 16}, // 48°C
-	{470, 24}, // 47°C
-	{460, 32}, // 46°C
+	{50 * Celsius, 8},
+	{49 * Celsius, 12},
+	{48 * Celsius, 16},
+	{47 * Celsius, 24},
+	{46 * Celsius, 32},
 }
 
 type controller struct {
@@ -51,7 +58,7 @@ type controller struct {
 	// Sensors
 	evBatteryLevelPercent float64 // 0.0 - 100.0
 	exportedSolarW        float64
-	tempDeciCelsius       int64
+	temp                  Temperature
 	loadReductionEnabled  bool
 	controllerStrategy    strategy
 	setEcoPowerLimit      func(float64) error
@@ -99,8 +106,8 @@ func (c *controller) SetControllerStrategy(strategy strategy) {
 	updateSensor(c, &c.controllerStrategy, strategy, observedStrategy)
 }
 
-func (c *controller) SetEVSETempDeciCelsius(temp int64) {
-	updateSensor(c, &c.tempDeciCelsius, temp, observedTemp)
+func (c *controller) SetEVSETemp(temp Temperature) {
+	updateSensor(c, &c.temp, temp, observedTemp)
 }
 
 func (c *controller) seen(checks ...observedValues) bool {
@@ -113,7 +120,7 @@ func (c *controller) seen(checks ...observedValues) bool {
 	return true
 }
 
-func maxPowerForTemp(temp int64) int32 {
+func maxPowerForTemp(temp Temperature) int32 {
 	var maxPower int32 = math.MaxInt32
 
 	for _, tempClamp := range tempClamps {
@@ -135,7 +142,7 @@ func (c *controller) computeMaxPower() int32 {
 	var maxPower int32 = math.MaxInt32
 
 	if c.seen(observedTemp) {
-		maxPower = maxPowerForTemp(c.tempDeciCelsius)
+		maxPower = maxPowerForTemp(c.temp)
 	}
 
 	if c.controllerStrategy == strategyFullSpeed {
