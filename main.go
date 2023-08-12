@@ -207,6 +207,12 @@ func main() {
 			cont.SetExportedSolarW(0)
 		}
 
+		if v, ok := metersResp["battery"]; ok {
+			cont.SetExportedBatteryW(v.InstantPower)
+		} else {
+			cont.SetExportedBatteryW(0)
+		}
+
 		_, err = teslaClient.GetStateOfEnergy()
 		if err != nil {
 			log.Fatal(err)

@@ -18,8 +18,9 @@ const (
 type observedValues int
 
 const (
-	observedBattery observedValues = 1 << iota
+	observedEVBattery observedValues = 1 << iota
 	observedSolar
+	observedBattery
 	observedLR
 	observedStrategy
 	observedTemp
@@ -57,6 +58,7 @@ type controller struct {
 
 	// Sensors
 	evBatteryLevelPercent float64 // 0.0 - 100.0
+	exportedBatteryW      float64
 	exportedSolarW        float64
 	temp                  Temperature
 	loadReductionEnabled  bool
@@ -91,7 +93,11 @@ func updateSensor[T comparable](c *controller, oldValue *T, newValue T, obs obse
 }
 
 func (c *controller) SetEVBatteryLevelPercent(batt float64) {
-	updateSensor(c, &c.evBatteryLevelPercent, batt, observedBattery)
+	updateSensor(c, &c.evBatteryLevelPercent, batt, observedEVBattery)
+}
+
+func (c *controller) SetExportedBatteryW(batteryW float64) {
+	updateSensor(c, &c.exportedBatteryW, batteryW, observedBattery)
 }
 
 func (c *controller) SetExportedSolarW(solarW float64) {
@@ -160,7 +166,15 @@ func (c *controller) computeMaxPower() int32 {
 		return 0
 	}
 
-	if c.seen(observedBattery) {
+	if c.seen(observedBattery) && c.exportedBatteryW > 200 {
+		// If battery is exporting non-trivial power, shut off EV charging.
+		// This can happen if Tesla gateway is set to "timed based control".
+		// During peak period, solar gets exported to grid and battery exports
+		// to load. No point charging the EV during this time.
+		return 0
+	}
+
+	if c.seen(observedEVBattery) {
 		if c.evBatteryLevelPercent < 60 {
 			return maxPower
 		}
