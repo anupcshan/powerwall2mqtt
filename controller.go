@@ -24,6 +24,7 @@ const (
 	observedLR
 	observedStrategy
 	observedTemp
+	observedLoad
 )
 
 type Temperature int64
@@ -60,6 +61,7 @@ type controller struct {
 	evBatteryLevelPercent float64 // 0.0 - 100.0
 	exportedBatteryW      float64
 	exportedSolarW        float64
+	loadW                 float64
 	temp                  Temperature
 	loadReductionEnabled  bool
 	controllerStrategy    strategy
@@ -104,6 +106,10 @@ func (c *controller) SetExportedSolarW(solarW float64) {
 	updateSensor(c, &c.exportedSolarW, solarW, observedSolar)
 }
 
+func (c *controller) SetLoadW(loadW float64) {
+	updateSensor(c, &c.loadW, loadW, observedLoad)
+}
+
 func (c *controller) SetLoadReduction(enabled bool) {
 	updateSensor(c, &c.loadReductionEnabled, enabled, observedLR)
 }
@@ -114,6 +120,18 @@ func (c *controller) SetControllerStrategy(strategy strategy) {
 
 func (c *controller) SetEVSETemp(temp Temperature) {
 	updateSensor(c, &c.temp, temp, observedTemp)
+}
+
+func (c *controller) GetExportedSolarW() float64 {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	return c.exportedSolarW
+}
+
+func (c *controller) GetLoadW() float64 {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	return c.loadW
 }
 
 func (c *controller) seen(checks ...observedValues) bool {

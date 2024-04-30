@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"html/template"
 	"log"
 	"net/http"
 	"time"
@@ -13,7 +14,40 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-var labels = []string{"meter"}
+const (
+	indexTmpl = `
+<!DOCTYPE html>
+<html>
+<head>
+	<meta http-equiv="refresh" content="2">
+	<style>
+	table, th, td {
+		border: 1px solid black;
+		border-collapse: collapse;
+		padding: 5px;
+	}
+	</style>
+</head>
+<body>
+	<table>
+		<tr>
+			<th>Solar</th>
+			<th>Load</th>
+		</tr>
+		<tr>
+			<td>{{printf "%.0f" .SolarW}} W</td>
+			<td>{{printf "%.0f" .LoadW}} W</td>
+		</tr>
+	</table>
+</body>
+</html>
+`
+)
+
+var (
+	labels = []string{"meter"}
+	tmpl   = template.Must(template.New("index").Parse(indexTmpl))
+)
 
 func main() {
 	log.SetFlags(log.Lshortfile | log.Ltime)
@@ -115,11 +149,6 @@ func main() {
 
 	ticker := time.NewTicker(*pollingInterval)
 
-	http.Handle("/metrics", promhttp.Handler())
-	go func() {
-		http.ListenAndServe(*listen, nil)
-	}()
-
 	var evseClient *openEVSEClient
 	if *openEVSEAddr != "" {
 		evseClient = &openEVSEClient{
@@ -146,6 +175,24 @@ func main() {
 			}
 		},
 	)
+
+	http.Handle("/metrics", promhttp.Handler())
+	http.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		solarW := cont.GetExportedSolarW()
+		loadW := cont.GetLoadW()
+		if err := tmpl.Execute(w, struct {
+			SolarW float64
+			LoadW  float64
+		}{
+			solarW,
+			loadW,
+		}); err != nil {
+			log.Printf("Error executing template: %v", err)
+		}
+	}))
+	go func() {
+		http.ListenAndServe(*listen, nil)
+	}()
 
 	if *evChargeLevelTopic != "" {
 		mqttClient.Subscribe(*evChargeLevelTopic, 1, func(_ mqtt.Client, msg mqtt.Message) {
@@ -203,6 +250,12 @@ func main() {
 
 		if v, ok := metersResp["site"]; ok {
 			cont.SetExportedSolarW(-v.InstantPower)
+		} else {
+			cont.SetExportedSolarW(0)
+		}
+
+		if v, ok := metersResp["load"]; ok {
+			cont.SetLoadW(v.InstantPower)
 		} else {
 			cont.SetExportedSolarW(0)
 		}
