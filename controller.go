@@ -19,12 +19,13 @@ type observedValues int
 
 const (
 	observedEVBattery observedValues = 1 << iota
-	observedSolar
+	observedExportedSolar
 	observedBattery
 	observedLR
 	observedStrategy
 	observedTemp
 	observedLoad
+	observedSolar
 )
 
 type Temperature int64
@@ -61,6 +62,7 @@ type controller struct {
 	evBatteryLevelPercent float64 // 0.0 - 100.0
 	exportedBatteryW      float64
 	exportedSolarW        float64
+	solarW                float64
 	loadW                 float64
 	temp                  Temperature
 	loadReductionEnabled  bool
@@ -103,7 +105,11 @@ func (c *controller) SetExportedBatteryW(batteryW float64) {
 }
 
 func (c *controller) SetExportedSolarW(solarW float64) {
-	updateSensor(c, &c.exportedSolarW, solarW, observedSolar)
+	updateSensor(c, &c.exportedSolarW, solarW, observedExportedSolar)
+}
+
+func (c *controller) SetSolarW(solarW float64) {
+	updateSensor(c, &c.solarW, solarW, observedSolar)
 }
 
 func (c *controller) SetLoadW(loadW float64) {
@@ -122,10 +128,10 @@ func (c *controller) SetEVSETemp(temp Temperature) {
 	updateSensor(c, &c.temp, temp, observedTemp)
 }
 
-func (c *controller) GetExportedSolarW() float64 {
+func (c *controller) GetSolarW() float64 {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	return c.exportedSolarW
+	return c.solarW
 }
 
 func (c *controller) GetLoadW() float64 {
@@ -198,7 +204,7 @@ func (c *controller) computeMaxPower() int32 {
 		}
 	}
 
-	if c.seen(observedSolar) {
+	if c.seen(observedExportedSolar) {
 		if maxPower < int32(c.exportedSolarW) {
 			return maxPower
 		}

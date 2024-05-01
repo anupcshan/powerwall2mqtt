@@ -178,7 +178,7 @@ func main() {
 
 	http.Handle("/metrics", promhttp.Handler())
 	http.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		solarW := cont.GetExportedSolarW()
+		solarW := cont.GetSolarW()
 		loadW := cont.GetLoadW()
 		if err := tmpl.Execute(w, struct {
 			SolarW float64
@@ -257,7 +257,13 @@ func main() {
 		if v, ok := metersResp["load"]; ok {
 			cont.SetLoadW(v.InstantPower)
 		} else {
-			cont.SetExportedSolarW(0)
+			cont.SetLoadW(0)
+		}
+
+		if v, ok := metersResp["solar"]; ok {
+			cont.SetSolarW(v.InstantPower)
+		} else {
+			cont.SetSolarW(0)
 		}
 
 		if v, ok := metersResp["battery"]; ok {
