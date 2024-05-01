@@ -23,6 +23,7 @@ const (
 		border: 1px solid black;
 		border-collapse: collapse;
 		padding: 5px;
+		text-align: center;
 	}
 	</style>
 
@@ -40,14 +41,17 @@ const (
 	</script>
 </head>
 <body>
+	<div>Last updated: <span id="last-updated">Never</span></div><br/>
 	<table>
 		<tr>
 			<th>Solar</th>
 			<th>Load</th>
+			<th>Powerwall Level</th>
 		</tr>
 		<tr>
 			<td id="solar">Pending</td>
 			<td id="load">Pending</td>
+			<td id="powerwall-batt-level">Pending</td>
 		</tr>
 	</table>
 </body>
@@ -193,13 +197,15 @@ func main() {
 	http.Handle("/events", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 
-		ticker := time.NewTicker(2 * time.Second)
+		ticker := time.NewTicker(time.Second)
 		defer ticker.Stop()
 
 		for {
 			data := map[string]string{
-				"solar": fmt.Sprintf("%.0f W", cont.GetSolarW()),
-				"load":  fmt.Sprintf("%.0f W", cont.GetLoadW()),
+				"solar":                fmt.Sprintf("%.0f W", cont.GetSolarW()),
+				"load":                 fmt.Sprintf("%.0f W", cont.GetLoadW()),
+				"powerwall-batt-level": fmt.Sprintf("%.1f%%", cont.GetPowerwallBatteryLevel()),
+				"last-updated":         time.Now().Format(time.DateTime),
 			}
 			fmt.Fprint(w, "event: data\n")
 			fmt.Fprint(w, "data: ")
@@ -300,10 +306,11 @@ func main() {
 			cont.SetExportedBatteryW(0)
 		}
 
-		_, err = teslaClient.GetStateOfEnergy()
+		soe, err := teslaClient.GetStateOfEnergy()
 		if err != nil {
 			log.Fatal(err)
 		}
+		cont.SetPowerwallBatteryLevelPercent(soe.Percentage)
 
 		_, err = teslaClient.GetOperation()
 		if err != nil {

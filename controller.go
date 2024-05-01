@@ -26,6 +26,7 @@ const (
 	observedTemp
 	observedLoad
 	observedSolar
+	observedBatteryLevel
 )
 
 type Temperature int64
@@ -60,6 +61,7 @@ type controller struct {
 
 	// Sensors
 	evBatteryLevelPercent float64 // 0.0 - 100.0
+	pwBatteryLevelPercent float64 // 0.0 - 100.0
 	exportedBatteryW      float64
 	exportedSolarW        float64
 	solarW                float64
@@ -100,6 +102,10 @@ func (c *controller) SetEVBatteryLevelPercent(batt float64) {
 	updateSensor(c, &c.evBatteryLevelPercent, batt, observedEVBattery)
 }
 
+func (c *controller) SetPowerwallBatteryLevelPercent(batt float64) {
+	updateSensor(c, &c.pwBatteryLevelPercent, batt, observedBatteryLevel)
+}
+
 func (c *controller) SetExportedBatteryW(batteryW float64) {
 	updateSensor(c, &c.exportedBatteryW, batteryW, observedBattery)
 }
@@ -138,6 +144,12 @@ func (c *controller) GetLoadW() float64 {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	return c.loadW
+}
+
+func (c *controller) GetPowerwallBatteryLevel() float64 {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	return c.pwBatteryLevelPercent
 }
 
 func (c *controller) seen(checks ...observedValues) bool {
