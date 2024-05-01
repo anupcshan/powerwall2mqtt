@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"html/template"
 	"log"
 	"net/http"
 	"time"
@@ -19,7 +18,6 @@ const (
 <!DOCTYPE html>
 <html>
 <head>
-	<meta http-equiv="refresh" content="2">
 	<style>
 	table, th, td {
 		border: 1px solid black;
@@ -27,6 +25,19 @@ const (
 		padding: 5px;
 	}
 	</style>
+
+	<script>
+	const eventSource = new EventSource('/events');
+	eventSource.addEventListener('data', function(event) {
+		const parsedData = JSON.parse(event.data);
+		for (const key in parsedData) {
+			const el = document.getElementById(key);
+			if (el) {
+				el.innerText = parsedData[key];
+			}
+		}
+	});
+	</script>
 </head>
 <body>
 	<table>
@@ -35,8 +46,8 @@ const (
 			<th>Load</th>
 		</tr>
 		<tr>
-			<td>{{printf "%.0f" .SolarW}} W</td>
-			<td>{{printf "%.0f" .LoadW}} W</td>
+			<td id="solar">Pending</td>
+			<td id="load">Pending</td>
 		</tr>
 	</table>
 </body>
@@ -46,7 +57,6 @@ const (
 
 var (
 	labels = []string{"meter"}
-	tmpl   = template.Must(template.New("index").Parse(indexTmpl))
 )
 
 func main() {
@@ -178,16 +188,34 @@ func main() {
 
 	http.Handle("/metrics", promhttp.Handler())
 	http.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		solarW := cont.GetSolarW()
-		loadW := cont.GetLoadW()
-		if err := tmpl.Execute(w, struct {
-			SolarW float64
-			LoadW  float64
-		}{
-			solarW,
-			loadW,
-		}); err != nil {
-			log.Printf("Error executing template: %v", err)
+		fmt.Fprint(w, indexTmpl)
+	}))
+	http.Handle("/events", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+
+		ticker := time.NewTicker(2 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			data := map[string]string{
+				"solar": fmt.Sprintf("%.0f W", cont.GetSolarW()),
+				"load":  fmt.Sprintf("%.0f W", cont.GetLoadW()),
+			}
+			fmt.Fprint(w, "event: data\n")
+			fmt.Fprint(w, "data: ")
+			if err := json.NewEncoder(w).Encode(data); err != nil {
+				log.Printf("Error encoding JSON: %v", err)
+				return
+			}
+			fmt.Fprint(w, "\n\n")
+
+			w.(http.Flusher).Flush()
+
+			select {
+			case <-r.Context().Done():
+				return
+			case <-ticker.C:
+			}
 		}
 	}))
 	go func() {
