@@ -152,6 +152,12 @@ func (c *controller) GetPowerwallBatteryLevel() float64 {
 	return c.pwBatteryLevelPercent
 }
 
+func (c *controller) GetExportedSolarW() float64 {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	return c.exportedSolarW
+}
+
 func (c *controller) seen(checks ...observedValues) bool {
 	for _, check := range checks {
 		if c.seenValues&check != check {

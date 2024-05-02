@@ -46,11 +46,13 @@ const (
 		<tr>
 			<th>Solar</th>
 			<th>Load</th>
+			<th>Grid</th>
 			<th>Powerwall Level</th>
 		</tr>
 		<tr>
 			<td id="solar">Pending</td>
 			<td id="load">Pending</td>
+			<td id="site">Pending</td>
 			<td id="powerwall-batt-level">Pending</td>
 		</tr>
 	</table>
@@ -204,6 +206,7 @@ func main() {
 			data := map[string]string{
 				"solar":                fmt.Sprintf("%.0f W", cont.GetSolarW()),
 				"load":                 fmt.Sprintf("%.0f W", cont.GetLoadW()),
+				"site":                 fmt.Sprintf("%.0f W", -cont.GetExportedSolarW()),
 				"powerwall-batt-level": fmt.Sprintf("%.1f%%", cont.GetPowerwallBatteryLevel()),
 				"last-updated":         time.Now().Format(time.DateTime),
 			}
