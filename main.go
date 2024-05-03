@@ -75,6 +75,7 @@ func main() {
 	gridPowerInverseTopic := flag.String("grid-inverse-topic", "powerwall/excess_power", "Topic to log inverse/negative of grid power to")
 	openEVSEAddr := flag.String("openevse", "", "OpenEVSE address (like 192.168.X.X or openevse.local)")
 	listen := flag.String("listen", ":9900", "Listen address for Prometheus handler")
+	debug := flag.Bool("debug", false, "Print debug logs")
 	dryRun := flag.Bool("dry-run", true, "Dry run mode (disable any writes in dry run mode)")
 	evChargeLevelTopic := flag.String("ev-charge-level-topic", "", "MQTT topic with the most recently polled EV charge level (from onstar2mqtt)")
 	evChargeStrategyTopic := flag.String("ev-charge-strategy-topic", "", "MQTT topic to read/write the current charge strategy")
@@ -113,6 +114,12 @@ func main() {
 		Help:      "Total energy imported from individual meters (Wh)",
 	}, labels)
 
+	energyLevelGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "energy",
+		Name:      "energy_level",
+		Help:      "Energy levels for individual meters (Wh)",
+	}, labels)
+
 	powerGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "energy",
 		Name:      "instantaneous_power",
@@ -142,13 +149,14 @@ func main() {
 		currentGauge,
 		energyExportedGauge,
 		energyImportedGauge,
+		energyLevelGauge,
 		powerGauge,
 		tempGauge,
 		connectedGauge,
 		gridServicesEnabledGauge,
 	)
 
-	teslaClient := NewTEGClient(*powerwallIP, *password, batteryLevelGauge, energyExportedGauge, energyImportedGauge, powerGauge, gridServicesEnabledGauge)
+	teslaClient := NewTEGClient(*powerwallIP, *password, *debug, batteryLevelGauge, energyExportedGauge, energyImportedGauge, energyLevelGauge, powerGauge, gridServicesEnabledGauge)
 	if err := teslaClient.Login(); err != nil {
 		log.Fatal(err)
 	}
@@ -274,6 +282,11 @@ func main() {
 
 	for {
 		gridStatus, err := teslaClient.GetGridStatus()
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		_, err = teslaClient.GetSystemStatus()
 		if err != nil {
 			log.Fatal(err)
 		}

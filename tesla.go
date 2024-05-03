@@ -18,9 +18,11 @@ type teslaClient struct {
 	client                   *http.Client
 	gatewayAddr              string
 	password                 string
+	debug                    bool
 	batteryLevelGauge        *prometheus.GaugeVec
 	energyExportedGauge      *prometheus.GaugeVec
 	energyImportedGauge      *prometheus.GaugeVec
+	energyLevelsGauge        *prometheus.GaugeVec
 	gridServicesEnabledGauge *prometheus.GaugeVec
 	powerGauge               *prometheus.GaugeVec
 }
@@ -37,15 +39,18 @@ func newHTTPClient() *http.Client {
 	}
 }
 
-func NewTEGClient(gatewayAddr string, password string,
-	batteryLevelGauge, energyExportedGauge, energyImportedGauge, powerGauge, gridServicesEnabledGauge *prometheus.GaugeVec,
+func NewTEGClient(
+	gatewayAddr string, password string, debug bool,
+	batteryLevelGauge, energyExportedGauge, energyImportedGauge, energyLevelsGauge, powerGauge, gridServicesEnabledGauge *prometheus.GaugeVec,
 ) *teslaClient {
 	return &teslaClient{
 		gatewayAddr:              gatewayAddr,
 		password:                 password,
+		debug:                    debug,
 		batteryLevelGauge:        batteryLevelGauge,
 		energyExportedGauge:      energyExportedGauge,
 		energyImportedGauge:      energyImportedGauge,
+		energyLevelsGauge:        energyLevelsGauge,
 		powerGauge:               powerGauge,
 		gridServicesEnabledGauge: gridServicesEnabledGauge,
 	}
@@ -92,11 +97,26 @@ func getAPI[T any](c *teslaClient, path string, result T, reportMetrics func()) 
 	}
 
 	defer resp.Body.Close()
-	if err := json.NewDecoder(resp.Body).Decode(result); err != nil {
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
 		return err
 	}
 
-	log.Printf("%+v", result)
+	if c.debug {
+		pretty := &bytes.Buffer{}
+		if err := json.Indent(pretty, body, "", "  "); err != nil {
+			return err
+		}
+		log.Printf("GET %s: %s", path, pretty.String())
+	}
+
+	if err := json.Unmarshal(body, result); err != nil {
+		return err
+	}
+
+	if c.debug {
+		log.Printf("%+v", result)
+	}
 	reportMetrics()
 	return nil
 }
@@ -141,6 +161,24 @@ func (c *teslaClient) GetStateOfEnergy() (*Soe, error) {
 		return nil, err
 	}
 	return &soeResp, nil
+}
+
+type SystemStatus struct {
+	NominalFullPackEnergyWh  float64 `json:"nominal_full_pack_energy"`
+	NominalEnergyRemainingWh float64 `json:"nominal_energy_remaining"`
+}
+
+func (c *teslaClient) GetSystemStatus() (*SystemStatus, error) {
+	var systemStatusResp SystemStatus
+	err := getAPI(c, "/api/system_status", &systemStatusResp, func() {
+		c.energyLevelsGauge.WithLabelValues("nominal-full-pack").Set(systemStatusResp.NominalFullPackEnergyWh)
+		c.energyLevelsGauge.WithLabelValues("nominal-energy-remaning").Set(systemStatusResp.NominalEnergyRemainingWh)
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	return &systemStatusResp, nil
 }
 
 type GridStatus struct {
