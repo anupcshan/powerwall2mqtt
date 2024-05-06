@@ -285,13 +285,12 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
+		cont.SetLoadReduction(gridStatus.GridServicesActive)
 
 		_, err = teslaClient.GetSystemStatus()
 		if err != nil {
 			log.Fatal(err)
 		}
-
-		cont.SetLoadReduction(gridStatus.GridServicesActive)
 
 		metersResp, err := teslaClient.GetMeterAggregates()
 		if err != nil {
