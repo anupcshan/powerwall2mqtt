@@ -18,6 +18,8 @@ const (
 <!DOCTYPE html>
 <html>
 <head>
+	<script src="https://unpkg.com/htmx.org@1.9.12" integrity="sha384-ujb1lZYygJmzgSwoxRggbCHcjc0rB2XoQrxeTUQyRjrOnlCoYta87iKBWq3EsdM2" crossorigin="anonymous"></script>
+	<script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/sse.js"></script>
 	<style>
 	table, th, td {
 		border: 1px solid black;
@@ -26,36 +28,25 @@ const (
 		text-align: center;
 	}
 	</style>
-
-	<script>
-	const eventSource = new EventSource('/events');
-	eventSource.addEventListener('data', function(event) {
-		const parsedData = JSON.parse(event.data);
-		for (const key in parsedData) {
-			const el = document.getElementById(key);
-			if (el) {
-				el.innerText = parsedData[key];
-			}
-		}
-	});
-	</script>
 </head>
 <body>
-	<div>Last updated: <span id="last-updated">Never</span></div><br/>
-	<table>
-		<tr>
-			<th>Solar</th>
-			<th>Load</th>
-			<th>Grid</th>
-			<th>Powerwall Level</th>
-		</tr>
-		<tr>
-			<td id="solar">Pending</td>
-			<td id="load">Pending</td>
-			<td id="site">Pending</td>
-			<td id="powerwall-batt-level">Pending</td>
-		</tr>
-	</table>
+	<div hx-ext="sse" sse-connect="/events">
+		<div>Last updated: <span sse-swap="last-updated">Never</span></div><br/>
+		<table>
+			<tr>
+				<th>Solar</th>
+				<th>Load</th>
+				<th>Grid</th>
+				<th>Powerwall Level</th>
+			</tr>
+			<tr>
+				<td sse-swap="solar">Pending</td>
+				<td sse-swap="load">Pending</td>
+				<td sse-swap="site">Pending</td>
+				<td sse-swap="powerwall-batt-level">Pending</td>
+			</tr>
+		</table>
+	</div>
 </body>
 </html>
 `
@@ -218,13 +209,12 @@ func main() {
 				"powerwall-batt-level": fmt.Sprintf("%.1f%%", cont.GetPowerwallBatteryLevel()),
 				"last-updated":         time.Now().Format(time.DateTime),
 			}
-			fmt.Fprint(w, "event: data\n")
-			fmt.Fprint(w, "data: ")
-			if err := json.NewEncoder(w).Encode(data); err != nil {
-				log.Printf("Error encoding JSON: %v", err)
-				return
+
+			for k, v := range data {
+				fmt.Fprintf(w, "event: %s\n", k)
+				fmt.Fprintf(w, "data: %s\n", v)
+				fmt.Fprint(w, "\n\n")
 			}
-			fmt.Fprint(w, "\n\n")
 
 			w.(http.Flusher).Flush()
 
