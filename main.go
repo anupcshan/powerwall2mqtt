@@ -1,6 +1,7 @@
 package main
 
 import (
+	"embed"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -18,8 +19,8 @@ const (
 <!DOCTYPE html>
 <html>
 <head>
-	<script src="https://unpkg.com/htmx.org@1.9.12" integrity="sha384-ujb1lZYygJmzgSwoxRggbCHcjc0rB2XoQrxeTUQyRjrOnlCoYta87iKBWq3EsdM2" crossorigin="anonymous"></script>
-	<script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/sse.js"></script>
+	<script src="/assets/htmx.org@1.9.12/dist/htmx.min.js"></script>
+	<script src="/assets/htmx.org@1.9.12/dist/ext/sse.js"></script>
 	<style>
 	table, th, td {
 		border: 1px solid black;
@@ -54,6 +55,8 @@ const (
 
 var (
 	labels = []string{"meter"}
+	//go:embed assets
+	assets embed.FS
 )
 
 func main() {
@@ -192,6 +195,7 @@ func main() {
 	)
 
 	http.Handle("/metrics", promhttp.Handler())
+	http.Handle("/assets/", http.FileServer(http.FS(assets)))
 	http.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, indexTmpl)
 	}))
