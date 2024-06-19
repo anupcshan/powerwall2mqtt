@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -42,7 +41,6 @@ func (c *openEVSEClient) GetStatus() (*EVSEStatus, error) {
 	}
 	_ = resp.Body.Close()
 
-	log.Printf("%+v", evStatusResp)
 	c.currentGauge.WithLabelValues("ev").Set(float64(evStatusResp.MilliAmp) / 1000)
 	c.energyImportedGauge.WithLabelValues("ev").Set(evStatusResp.TotalEnergy * 1000)
 	c.powerGauge.WithLabelValues("ev").Set(float64(evStatusResp.Voltage*evStatusResp.MilliAmp) / 1000)

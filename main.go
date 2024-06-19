@@ -56,10 +56,12 @@ const (
 			<tr>
 				<th>Temp</th>
 				<th>Current</th>
+				<th>EV</th>
 			</tr>
 			<tr>
 				<td sse-swap="evse-temp">Pending</td>
 				<td sse-swap="evse-current">Pending</td>
+				<td sse-swap="ev-connected">Pending</td>
 			</tr>
 		</table>
 	</div>
@@ -222,6 +224,12 @@ func main() {
 
 		for {
 			evseTemp := cont.GetEVSETemp()
+			var evConnected string
+			if cont.GetEVConnected() {
+				evConnected = "Connected"
+			} else {
+				evConnected = "Not Connected"
+			}
 			data := map[string]string{
 				"solar":                fmt.Sprintf("%.0f W", cont.GetSolarW()),
 				"load":                 fmt.Sprintf("%.0f W", cont.GetLoadW()),
@@ -229,6 +237,7 @@ func main() {
 				"powerwall-batt-level": fmt.Sprintf("%.1f%%", cont.GetPowerwallBatteryLevel()),
 				"evse-temp":            fmt.Sprintf("%d.%d C", evseTemp/10, evseTemp%10),
 				"evse-current":         fmt.Sprintf("%d mA", cont.GetEVSECurrent()),
+				"ev-connected":         evConnected,
 				"last-updated":         time.Now().Format(time.DateTime),
 			}
 
@@ -352,6 +361,7 @@ func main() {
 			} else {
 				cont.SetEVSETemp(Temperature(evseStatus.Temp) * DeciCelcius)
 				cont.SetEVSECurrent(evseStatus.MilliAmp)
+				cont.SetEVConnected(evseStatus.Vehicle == 1)
 			}
 		}
 
