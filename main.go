@@ -219,6 +219,8 @@ func main() {
 	http.Handle("/events", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 
+		dataCache := make(map[string]string)
+
 		ticker := time.NewTicker(time.Second)
 		defer ticker.Stop()
 
@@ -242,9 +244,14 @@ func main() {
 			}
 
 			for k, v := range data {
+				if dataCache[k] == v {
+					continue
+				}
+
 				fmt.Fprintf(w, "event: %s\n", k)
 				fmt.Fprintf(w, "data: %s\n", v)
 				fmt.Fprint(w, "\n\n")
+				dataCache[k] = v
 			}
 
 			w.(http.Flusher).Flush()
