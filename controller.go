@@ -27,6 +27,7 @@ const (
 	observedLoad
 	observedSolar
 	observedBatteryLevel
+	observedEVCurrent
 )
 
 type Temperature int64
@@ -67,6 +68,7 @@ type controller struct {
 	solarW                float64
 	loadW                 float64
 	temp                  Temperature
+	evseMilliAmp          int64
 	loadReductionEnabled  bool
 	controllerStrategy    strategy
 	setEcoPowerLimit      func(float64) error
@@ -134,6 +136,10 @@ func (c *controller) SetEVSETemp(temp Temperature) {
 	updateSensor(c, &c.temp, temp, observedTemp)
 }
 
+func (c *controller) SetEVSECurrent(milliAmp int64) {
+	updateSensor(c, &c.evseMilliAmp, milliAmp, observedEVCurrent)
+}
+
 func (c *controller) GetSolarW() float64 {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -156,6 +162,18 @@ func (c *controller) GetExportedSolarW() float64 {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	return c.exportedSolarW
+}
+
+func (c *controller) GetEVSETemp() Temperature {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	return c.temp
+}
+
+func (c *controller) GetEVSECurrent() int64 {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	return c.evseMilliAmp
 }
 
 func (c *controller) seen(checks ...observedValues) bool {

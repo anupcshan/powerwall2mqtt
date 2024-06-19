@@ -47,6 +47,21 @@ const (
 				<td sse-swap="powerwall-batt-level">Pending</td>
 			</tr>
 		</table>
+
+		<br/>
+
+		<div><b>EVSE:</b></div><br/>
+
+		<table>
+			<tr>
+				<th>Temp</th>
+				<th>Current</th>
+			</tr>
+			<tr>
+				<td sse-swap="evse-temp">Pending</td>
+				<td sse-swap="evse-current">Pending</td>
+			</tr>
+		</table>
 	</div>
 </body>
 </html>
@@ -206,11 +221,14 @@ func main() {
 		defer ticker.Stop()
 
 		for {
+			evseTemp := cont.GetEVSETemp()
 			data := map[string]string{
 				"solar":                fmt.Sprintf("%.0f W", cont.GetSolarW()),
 				"load":                 fmt.Sprintf("%.0f W", cont.GetLoadW()),
 				"site":                 fmt.Sprintf("%.0f W", -cont.GetExportedSolarW()),
 				"powerwall-batt-level": fmt.Sprintf("%.1f%%", cont.GetPowerwallBatteryLevel()),
+				"evse-temp":            fmt.Sprintf("%d.%d C", evseTemp/10, evseTemp%10),
+				"evse-current":         fmt.Sprintf("%d mA", cont.GetEVSECurrent()),
 				"last-updated":         time.Now().Format(time.DateTime),
 			}
 
@@ -333,6 +351,7 @@ func main() {
 				log.Printf("Error getting status from OpenEVSE: %v", err)
 			} else {
 				cont.SetEVSETemp(Temperature(evseStatus.Temp) * DeciCelcius)
+				cont.SetEVSECurrent(evseStatus.MilliAmp)
 			}
 		}
 
