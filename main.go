@@ -227,7 +227,6 @@ func main() {
 		defer ticker.Stop()
 
 		for {
-			evseTemp := cont.GetEVSETemp()
 			var evConnected string
 			if cont.GetEVConnected() {
 				evConnected = "Connected"
@@ -240,7 +239,7 @@ func main() {
 				"site":                 fmt.Sprintf("%.0f W", -cont.GetExportedSolarW()),
 				"powerwall-batt-level": fmt.Sprintf("%.1f%%", cont.GetPowerwallBatteryLevel()),
 				"powerwall-oper-mode":  cont.GetOperationMode().String(),
-				"evse-temp":            fmt.Sprintf("%d.%d C", evseTemp/10, evseTemp%10),
+				"evse-temp":            cont.GetEVSETemp().String(),
 				"evse-current":         fmt.Sprintf("%d mA", cont.GetEVSECurrent()),
 				"ev-connected":         evConnected,
 				"last-updated":         time.Now().Format(time.DateTime),

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"math"
 	"sync"
 	"time"
@@ -33,6 +34,10 @@ const (
 )
 
 type Temperature int64
+
+func (t Temperature) String() string {
+	return fmt.Sprintf("%d.%d C", t/10, t%10)
+}
 
 const (
 	DeciCelcius Temperature = 1
