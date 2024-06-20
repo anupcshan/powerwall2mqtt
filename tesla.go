@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"net/http/cookiejar"
+	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/net/publicsuffix"
@@ -203,8 +204,48 @@ func (c *teslaClient) GetGridStatus() (*GridStatus, error) {
 	return &gridStatusResp, nil
 }
 
+type OperationMode int
+
+const (
+	OperationUnknown OperationMode = iota
+	OperationSelfConsumption
+	OperationAutonomous
+	OperationBackup
+)
+
+func (o OperationMode) String() string {
+	switch o {
+	case OperationSelfConsumption:
+		return "self-consumption"
+	case OperationBackup:
+		return "backup"
+	case OperationAutonomous:
+		return "autonomous"
+	default:
+		return "unknown"
+	}
+}
+
+func (o *OperationMode) UnmarshalJSON(b []byte) error {
+	str := strings.Trim(string(b), `"`)
+
+	switch str {
+	case "autonomous":
+		*o = OperationAutonomous
+	case "self_consumption":
+		*o = OperationSelfConsumption
+	case "backup":
+		*o = OperationBackup
+	default:
+		return fmt.Errorf("Unknown operation mode %s", str)
+	}
+
+	return nil
+}
+
 type Operation struct {
-	BackupReservePercent float64 `json:"backup_reserve_percent"`
+	BackupReservePercent float64       `json:"backup_reserve_percent"`
+	Mode                 OperationMode `json:"real_mode"`
 }
 
 func (c *teslaClient) GetOperation() (*Operation, error) {

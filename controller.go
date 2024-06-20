@@ -26,6 +26,7 @@ const (
 	observedTemp
 	observedLoad
 	observedSolar
+	observedOperationMode
 	observedBatteryLevel
 	observedEVCurrent
 	observedEVConnected
@@ -68,6 +69,7 @@ type controller struct {
 	exportedSolarW        float64
 	solarW                float64
 	loadW                 float64
+	operationMode         OperationMode
 	temp                  Temperature
 	evseMilliAmp          int64
 	evConnected           bool
@@ -123,7 +125,11 @@ func (c *controller) SetSolarW(solarW float64) {
 }
 
 func (c *controller) SetLoadW(loadW float64) {
-	updateSensor(c, &c.loadW, loadW, observedLoad)
+	updateSensor(c, &c.loadW, loadW, observedOperationMode)
+}
+
+func (c *controller) SetOperationMode(operationMode OperationMode) {
+	updateSensor(c, &c.operationMode, operationMode, observedLoad)
 }
 
 func (c *controller) SetLoadReduction(enabled bool) {
@@ -168,6 +174,12 @@ func (c *controller) GetExportedSolarW() float64 {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	return c.exportedSolarW
+}
+
+func (c *controller) GetOperationMode() OperationMode {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	return c.operationMode
 }
 
 func (c *controller) GetEVSETemp() Temperature {

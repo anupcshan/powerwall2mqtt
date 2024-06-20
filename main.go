@@ -39,12 +39,14 @@ const (
 				<th>Load</th>
 				<th>Grid</th>
 				<th>Powerwall Level</th>
+				<th>Operation Mode</th>
 			</tr>
 			<tr>
 				<td sse-swap="solar">Pending</td>
 				<td sse-swap="load">Pending</td>
 				<td sse-swap="site">Pending</td>
 				<td sse-swap="powerwall-batt-level">Pending</td>
+				<td sse-swap="powerwall-oper-mode">Pending</td>
 			</tr>
 		</table>
 
@@ -237,6 +239,7 @@ func main() {
 				"load":                 fmt.Sprintf("%.0f W", cont.GetLoadW()),
 				"site":                 fmt.Sprintf("%.0f W", -cont.GetExportedSolarW()),
 				"powerwall-batt-level": fmt.Sprintf("%.1f%%", cont.GetPowerwallBatteryLevel()),
+				"powerwall-oper-mode":  cont.GetOperationMode().String(),
 				"evse-temp":            fmt.Sprintf("%d.%d C", evseTemp/10, evseTemp%10),
 				"evse-current":         fmt.Sprintf("%d mA", cont.GetEVSECurrent()),
 				"ev-connected":         evConnected,
@@ -355,9 +358,10 @@ func main() {
 		}
 		cont.SetPowerwallBatteryLevelPercent(soe.Percentage)
 
-		_, err = teslaClient.GetOperation()
-		if err != nil {
+		if op, err := teslaClient.GetOperation(); err != nil {
 			log.Fatal(err)
+		} else {
+			cont.SetOperationMode(op.Mode)
 		}
 
 		if evseClient != nil {
