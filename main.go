@@ -227,12 +227,6 @@ func main() {
 		defer ticker.Stop()
 
 		for {
-			var evConnected string
-			if cont.GetEVConnected() {
-				evConnected = "Connected"
-			} else {
-				evConnected = "Not Connected"
-			}
 			data := map[string]string{
 				"solar":                fmt.Sprintf("%.0f W", cont.GetSolarW()),
 				"load":                 fmt.Sprintf("%.0f W", cont.GetLoadW()),
@@ -241,7 +235,7 @@ func main() {
 				"powerwall-oper-mode":  cont.GetOperationMode().String(),
 				"evse-temp":            cont.GetEVSETemp().String(),
 				"evse-current":         fmt.Sprintf("%d mA", cont.GetEVSECurrent()),
-				"ev-connected":         evConnected,
+				"ev-connected":         cont.GetEVConnected().String(),
 				"last-updated":         time.Now().Format(time.DateTime),
 			}
 

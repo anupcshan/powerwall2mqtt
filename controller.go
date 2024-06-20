@@ -62,6 +62,16 @@ var tempClamps = []struct {
 	{46 * Celsius, 32},
 }
 
+type connectedType bool
+
+func (c connectedType) String() string {
+	if c {
+		return "Connected"
+	} else {
+		return "Not Connected"
+	}
+}
+
 type controller struct {
 	lock       sync.Mutex
 	cond       *sync.Cond
@@ -77,7 +87,7 @@ type controller struct {
 	operationMode         OperationMode
 	temp                  Temperature
 	evseMilliAmp          int64
-	evConnected           bool
+	evConnected           connectedType
 	loadReductionEnabled  bool
 	controllerStrategy    strategy
 	setEcoPowerLimit      func(float64) error
@@ -153,7 +163,7 @@ func (c *controller) SetEVSECurrent(milliAmp int64) {
 	updateSensor(c, &c.evseMilliAmp, milliAmp, observedEVCurrent)
 }
 
-func (c *controller) SetEVConnected(connected bool) {
+func (c *controller) SetEVConnected(connected connectedType) {
 	updateSensor(c, &c.evConnected, connected, observedEVConnected)
 }
 
@@ -199,7 +209,7 @@ func (c *controller) GetEVSECurrent() int64 {
 	return c.evseMilliAmp
 }
 
-func (c *controller) GetEVConnected() bool {
+func (c *controller) GetEVConnected() connectedType {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	return c.evConnected
