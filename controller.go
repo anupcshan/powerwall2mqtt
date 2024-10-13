@@ -246,7 +246,7 @@ func maxPowerForTemp(temp Temperature) int32 {
 
 func (c *controller) isOffPeak(t time.Time) bool {
 	dayMinute := t.Hour()*60 + t.Minute()
-	return dayMinute >= int(c.peakRatesStartMinute) && dayMinute < int(c.peakRatesEndMinute)
+	return !(dayMinute >= int(c.peakRatesStartMinute) && dayMinute < int(c.peakRatesEndMinute))
 }
 
 func (c *controller) computeMaxPower() int32 {
