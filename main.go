@@ -285,12 +285,12 @@ func main() {
 
 			var strategy strategy
 			switch string(msg.Payload()) {
-			case "auto":
-				strategy = strategyAuto
+			case "solar":
+				strategy = strategySolar
 			case "fullspeed":
 				strategy = strategyFullSpeed
-			case "overnight":
-				strategy = strategyOvernight
+			case "offpeak":
+				strategy = strategyOffpeak
 			default:
 				log.Fatalf("Charge strategy %s unknown", msg.Payload())
 			}

@@ -11,9 +11,9 @@ type strategy int
 
 const (
 	strategyUnknown strategy = iota
-	strategyAuto
+	strategySolar
 	strategyFullSpeed
-	strategyOvernight
+	strategyOffpeak
 )
 
 type observedValues int
@@ -91,13 +91,19 @@ type controller struct {
 	loadReductionEnabled  bool
 	controllerStrategy    strategy
 	setEcoPowerLimit      func(float64) error
+
+	// Off peak duration
+	peakRatesStartMinute int64 // 16:00 is 16*60 + 0 = 960
+	peakRatesEndMinute   int64 // 21:00 is 21*60 + 0 = 1260
 }
 
 func NewController(
 	setEcoPowerLimit func(float64) error,
 ) *controller {
 	cont := &controller{
-		setEcoPowerLimit: setEcoPowerLimit,
+		setEcoPowerLimit:     setEcoPowerLimit,
+		peakRatesStartMinute: 16*60 + 0, // default 16:00 (PGE E-TOU-C)
+		peakRatesEndMinute:   21*60 + 0, // default 21:00
 	}
 
 	cont.cond = sync.NewCond(&cont.lock)
@@ -238,6 +244,11 @@ func maxPowerForTemp(temp Temperature) int32 {
 	return maxPower
 }
 
+func (c *controller) isOffPeak(t time.Time) bool {
+	dayMinute := t.Hour()*60 + t.Minute()
+	return dayMinute >= int(c.peakRatesStartMinute) && dayMinute < int(c.peakRatesEndMinute)
+}
+
 func (c *controller) computeMaxPower() int32 {
 	if !c.seen(observedStrategy) {
 		// Not enough data to make informed choices - try again when we have more data.
@@ -254,7 +265,7 @@ func (c *controller) computeMaxPower() int32 {
 		return maxPower
 	}
 
-	if c.controllerStrategy == strategyOvernight && time.Now().Hour() < 6 /* 12AM to 6AM */ {
+	if c.controllerStrategy == strategyOffpeak && c.isOffPeak(time.Now()) {
 		return maxPower
 	}
 
