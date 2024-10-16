@@ -60,12 +60,14 @@ const (
 				<th>Temp</th>
 				<th>Current</th>
 				<th>Power Budget</th>
+				<th>Strategy</th>
 				<th>EV</th>
 			</tr>
 			<tr>
 				<td sse-swap="evse-temp">Pending</td>
 				<td sse-swap="evse-current">Pending</td>
 				<td sse-swap="evse-budget">Pending</td>
+				<td sse-swap="evse-strategy">Pending</td>
 				<td sse-swap="ev-connected">Pending</td>
 			</tr>
 		</table>
@@ -223,6 +225,10 @@ func main() {
 	http.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, indexTmpl)
 	}))
+
+	var controllerStrategy atomic.Value
+	controllerStrategy.Store("")
+
 	http.Handle("/events", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 
@@ -241,6 +247,7 @@ func main() {
 				"evse-temp":            cont.GetEVSETemp().String(),
 				"evse-current":         fmt.Sprintf("%.1f A", float64(cont.GetEVSECurrent())/1000.0),
 				"evse-budget":          fmt.Sprintf("%d W", atomic.LoadInt32(&latestEVBudget)),
+				"evse-strategy":        controllerStrategy.Load().(string),
 				"ev-connected":         cont.GetEVConnected().String(),
 				"last-updated":         time.Now().Format(time.DateTime),
 			}
@@ -300,6 +307,7 @@ func main() {
 			default:
 				log.Fatalf("Charge strategy %s unknown", msg.Payload())
 			}
+			controllerStrategy.Store(string(msg.Payload()))
 			cont.SetControllerStrategy(strategy)
 		}).Wait()
 	}

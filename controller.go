@@ -265,8 +265,12 @@ func (c *controller) computeMaxPower() int32 {
 		return maxPower
 	}
 
-	if c.controllerStrategy == strategyOffpeak && c.isOffPeak(time.Now()) {
-		return maxPower
+	if c.controllerStrategy == strategyOffpeak {
+		if c.isOffPeak(time.Now()) {
+			return maxPower
+		} else {
+			return 0
+		}
 	}
 
 	// Load reduction is fairly high priority - it usually means bad weather (heatwave or storm).
