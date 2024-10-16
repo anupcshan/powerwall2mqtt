@@ -90,7 +90,7 @@ type controller struct {
 	evConnected           connectedType
 	loadReductionEnabled  bool
 	controllerStrategy    strategy
-	setEcoPowerLimit      func(float64) error
+	setEcoPowerLimit      func(int32) error
 
 	// Off peak duration
 	peakRatesStartMinute int64 // 16:00 is 16*60 + 0 = 960
@@ -98,7 +98,7 @@ type controller struct {
 }
 
 func NewController(
-	setEcoPowerLimit func(float64) error,
+	setEcoPowerLimit func(int32) error,
 ) *controller {
 	cont := &controller{
 		setEcoPowerLimit:     setEcoPowerLimit,
@@ -318,7 +318,7 @@ func (c *controller) singleLoop() error {
 		maxPower = volts * maxAmps
 	}
 
-	return c.setEcoPowerLimit(float64(maxPower))
+	return c.setEcoPowerLimit(maxPower)
 }
 
 func (c *controller) Loop() error {

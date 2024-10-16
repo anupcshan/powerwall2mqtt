@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -58,11 +59,13 @@ const (
 			<tr>
 				<th>Temp</th>
 				<th>Current</th>
+				<th>Power Budget</th>
 				<th>EV</th>
 			</tr>
 			<tr>
 				<td sse-swap="evse-temp">Pending</td>
 				<td sse-swap="evse-current">Pending</td>
+				<td sse-swap="evse-budget">Pending</td>
 				<td sse-swap="ev-connected">Pending</td>
 			</tr>
 		</table>
@@ -200,13 +203,15 @@ func main() {
 		}
 	}
 
+	var latestEVBudget int32
 	cont := NewController(
-		func(limit float64) error {
+		func(limit int32) error {
+			atomic.StoreInt32(&latestEVBudget, limit)
 			if *dryRun {
-				log.Printf("[DRY RUN] Setting eco power limit to %f", limit)
+				log.Printf("[DRY RUN] Setting eco power limit to %d", limit)
 				return nil
 			} else {
-				token := mqttClient.Publish(*gridPowerInverseTopic, 0, false, fmt.Sprintf("%f", limit))
+				token := mqttClient.Publish(*gridPowerInverseTopic, 0, false, fmt.Sprintf("%d", limit))
 				_ = token.Wait()
 				return token.Error()
 			}
@@ -235,6 +240,7 @@ func main() {
 				"powerwall-oper-mode":  cont.GetOperationMode().String(),
 				"evse-temp":            cont.GetEVSETemp().String(),
 				"evse-current":         fmt.Sprintf("%.1f A", float64(cont.GetEVSECurrent())/1000.0),
+				"evse-budget":          fmt.Sprintf("%d W", atomic.LoadInt32(&latestEVBudget)),
 				"ev-connected":         cont.GetEVConnected().String(),
 				"last-updated":         time.Now().Format(time.DateTime),
 			}
