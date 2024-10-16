@@ -25,6 +25,7 @@ type EVSEStatus struct {
 	Voltage       int64   `json:"voltage"`
 	TotalEnergy   float64 `json:"total_energy"`
 	Vehicle       int64   `json:"vehicle"`
+	Power         float64 `json:"power"`
 	MQTTConnected int64   `json:"mqtt_connected"`
 }
 
@@ -43,7 +44,7 @@ func (c *openEVSEClient) GetStatus() (*EVSEStatus, error) {
 
 	c.currentGauge.WithLabelValues("ev").Set(float64(evStatusResp.MilliAmp) / 1000)
 	c.energyImportedGauge.WithLabelValues("ev").Set(evStatusResp.TotalEnergy * 1000)
-	c.powerGauge.WithLabelValues("ev").Set(float64(evStatusResp.Voltage*evStatusResp.MilliAmp) / 1000)
+	c.powerGauge.WithLabelValues("ev").Set(evStatusResp.Power)
 	c.tempGauge.WithLabelValues("ev").Set(float64(evStatusResp.Temp) / 10)
 	c.connectedGauge.WithLabelValues("ev").Set(float64(evStatusResp.Vehicle))
 	c.connectedGauge.WithLabelValues("mqtt").Set(float64(evStatusResp.MQTTConnected))

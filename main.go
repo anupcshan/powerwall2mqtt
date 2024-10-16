@@ -234,7 +234,7 @@ func main() {
 				"powerwall-batt-level": fmt.Sprintf("%.1f%%", cont.GetPowerwallBatteryLevel()),
 				"powerwall-oper-mode":  cont.GetOperationMode().String(),
 				"evse-temp":            cont.GetEVSETemp().String(),
-				"evse-current":         fmt.Sprintf("%d mA", cont.GetEVSECurrent()),
+				"evse-current":         fmt.Sprintf("%.1f A", float64(cont.GetEVSECurrent())/1000.0),
 				"ev-connected":         cont.GetEVConnected().String(),
 				"last-updated":         time.Now().Format(time.DateTime),
 			}
