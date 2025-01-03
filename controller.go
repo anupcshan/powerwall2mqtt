@@ -78,7 +78,6 @@ type controller struct {
 	seenValues observedValues
 
 	// Sensors
-	evBatteryLevelPercent float64 // 0.0 - 100.0
 	pwBatteryLevelPercent float64 // 0.0 - 100.0
 	exportedBatteryW      float64
 	exportedSolarW        float64
@@ -123,10 +122,6 @@ func updateSensor[T comparable](c *controller, oldValue *T, newValue T, obs obse
 	if shouldNotify {
 		c.cond.Signal()
 	}
-}
-
-func (c *controller) SetEVBatteryLevelPercent(batt float64) {
-	updateSensor(c, &c.evBatteryLevelPercent, batt, observedEVBattery)
 }
 
 func (c *controller) SetPowerwallBatteryLevelPercent(batt float64) {
@@ -286,12 +281,6 @@ func (c *controller) computeMaxPower() int32 {
 		// During peak period, solar gets exported to grid and battery exports
 		// to load. No point charging the EV during this time.
 		return 0
-	}
-
-	if c.seen(observedEVBattery) {
-		if c.evBatteryLevelPercent < 60 {
-			return maxPower
-		}
 	}
 
 	if c.seen(observedExportedSolar) {

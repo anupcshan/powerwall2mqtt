@@ -2,7 +2,6 @@ package main
 
 import (
 	"embed"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -95,7 +94,6 @@ func main() {
 	listen := flag.String("listen", ":9900", "Listen address for Prometheus handler")
 	debug := flag.Bool("debug", false, "Print debug logs")
 	dryRun := flag.Bool("dry-run", true, "Dry run mode (disable any writes in dry run mode)")
-	evChargeLevelTopic := flag.String("ev-charge-level-topic", "", "MQTT topic with the most recently polled EV charge level (from onstar2mqtt)")
 	evChargeStrategyTopic := flag.String("ev-charge-strategy-topic", "", "MQTT topic to read/write the current charge strategy")
 
 	flag.Parse()
@@ -275,22 +273,6 @@ func main() {
 	go func() {
 		http.ListenAndServe(*listen, nil)
 	}()
-
-	if *evChargeLevelTopic != "" {
-		mqttClient.Subscribe(*evChargeLevelTopic, 1, func(_ mqtt.Client, msg mqtt.Message) {
-			log.Printf("Got message: %s", msg.Payload())
-			var bLevel struct {
-				EvBatteryLevel float64 `json:"ev_battery_level"`
-			}
-
-			if err := json.Unmarshal(msg.Payload(), &bLevel); err != nil {
-				log.Fatal(err)
-			}
-
-			batteryLevelGauge.WithLabelValues("ev").Set(bLevel.EvBatteryLevel)
-			cont.SetEVBatteryLevelPercent(bLevel.EvBatteryLevel)
-		}).Wait()
-	}
 
 	if *evChargeStrategyTopic != "" {
 		mqttClient.Subscribe(*evChargeStrategyTopic, 1, func(_ mqtt.Client, msg mqtt.Message) {
