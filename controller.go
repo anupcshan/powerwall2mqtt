@@ -322,6 +322,11 @@ func (c *controller) singleLoop() error {
 		maxPower = volts * maxAmps
 	}
 
+	if maxPower < 0 {
+		// If we're importing power, set max power to 0.
+		maxPower = 0
+	}
+
 	c.reporter.ReportBudget(maxPower)
 	return c.setEcoPowerLimit(maxPower)
 }
