@@ -170,6 +170,7 @@ func (c *controller) SetEVSECurrent(milliAmp int64) {
 
 func (c *controller) SetEVConnected(connected connectedType) {
 	updateSensor(c, &c.evConnected, connected, observedEVConnected)
+	c.reporter.ReportEVConnected(bool(connected))
 }
 
 func (c *controller) GetSolarW() float64 {
