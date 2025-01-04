@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
@@ -34,6 +35,7 @@ type MQTTReporter struct {
 	evSECurrentTopic     string
 	evSETemperatureTopic string
 	queue                chan ToNotify
+	lastSeenValues       map[string]string
 }
 
 func NewMQTTReporter(client mqtt.Client, topic string) *MQTTReporter {
@@ -44,6 +46,7 @@ func NewMQTTReporter(client mqtt.Client, topic string) *MQTTReporter {
 		evSECurrentTopic:     fmt.Sprintf("stat/%s/evse_current", topic),
 		evSETemperatureTopic: fmt.Sprintf("stat/%s/evse_temperature", topic),
 		queue:                make(chan ToNotify, 10),
+		lastSeenValues:       make(map[string]string),
 	}
 
 	go reporter.publishLoop()
@@ -53,9 +56,17 @@ func NewMQTTReporter(client mqtt.Client, topic string) *MQTTReporter {
 
 func (m MQTTReporter) publishLoop() {
 	for item := range m.queue {
+		if m.lastSeenValues[item.topic] == item.payload {
+			continue
+		}
+
 		token := m.mqttClient.Publish(item.topic, 0, false, item.payload)
 		_ = token.Wait()
-		_ = token.Error()
+		if err := token.Error(); err != nil {
+			log.Printf("Error publishing %s: %s", item.topic, err)
+		} else {
+			m.lastSeenValues[item.topic] = item.payload
+		}
 	}
 }
 
