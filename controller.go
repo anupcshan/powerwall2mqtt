@@ -39,6 +39,10 @@ func (t Temperature) String() string {
 	return fmt.Sprintf("%d.%d C", t/10, t%10)
 }
 
+func (t Temperature) ToCelsius() float64 {
+	return float64(t) / 10
+}
+
 const (
 	DeciCelcius Temperature = 1
 	Celsius                 = 10 * DeciCelcius
@@ -162,10 +166,12 @@ func (c *controller) SetControllerStrategy(strategy strategy) {
 
 func (c *controller) SetEVSETemp(temp Temperature) {
 	updateSensor(c, &c.temp, temp, observedTemp)
+	c.reporter.ReportEVSETemperature(temp)
 }
 
 func (c *controller) SetEVSECurrent(milliAmp int64) {
 	updateSensor(c, &c.evseMilliAmp, milliAmp, observedEVCurrent)
+	c.reporter.ReportEVSECurrent(milliAmp)
 }
 
 func (c *controller) SetEVConnected(connected connectedType) {
