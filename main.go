@@ -94,7 +94,7 @@ func main() {
 	listen := flag.String("listen", ":9900", "Listen address for Prometheus handler")
 	debug := flag.Bool("debug", false, "Print debug logs")
 	dryRun := flag.Bool("dry-run", true, "Dry run mode (disable any writes in dry run mode)")
-	evChargeStrategyTopic := flag.String("ev-charge-strategy-topic", "", "MQTT topic to read/write the current charge strategy")
+	haTopic := flag.String("ha-topic", "evcharger", "MQTT topic to read/write the current charge strategy")
 
 	flag.Parse()
 
@@ -203,8 +203,15 @@ func main() {
 		}
 	}
 
+	var reporter Reporter = NoopReporter{}
+
+	if *haTopic != "" {
+		reporter = NewMQTTReporter(mqttClient, *haTopic)
+	}
+
 	var latestEVBudget int32
 	cont := NewController(
+		reporter,
 		func(limit int32) error {
 			atomic.StoreInt32(&latestEVBudget, limit)
 			if *dryRun {
@@ -274,8 +281,9 @@ func main() {
 		http.ListenAndServe(*listen, nil)
 	}()
 
-	if *evChargeStrategyTopic != "" {
-		mqttClient.Subscribe(*evChargeStrategyTopic, 1, func(_ mqtt.Client, msg mqtt.Message) {
+	if *haTopic != "" {
+		chargeStrategyTopic := fmt.Sprintf("cmnd/%s/MODE", *haTopic)
+		mqttClient.Subscribe(chargeStrategyTopic, 1, func(_ mqtt.Client, msg mqtt.Message) {
 			log.Printf("Got message: %s", msg.Payload())
 
 			var strategy strategy

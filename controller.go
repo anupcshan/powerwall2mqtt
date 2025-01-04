@@ -77,6 +77,8 @@ type controller struct {
 	cond       *sync.Cond
 	seenValues observedValues
 
+	reporter Reporter
+
 	// Sensors
 	pwBatteryLevelPercent float64 // 0.0 - 100.0
 	exportedBatteryW      float64
@@ -97,9 +99,11 @@ type controller struct {
 }
 
 func NewController(
+	reporter Reporter,
 	setEcoPowerLimit func(int32) error,
 ) *controller {
 	cont := &controller{
+		reporter:             reporter,
 		setEcoPowerLimit:     setEcoPowerLimit,
 		peakRatesStartMinute: 16*60 + 0, // default 16:00 (PGE E-TOU-C)
 		peakRatesEndMinute:   21*60 + 0, // default 21:00
@@ -311,6 +315,7 @@ func (c *controller) singleLoop() error {
 		maxPower = volts * maxAmps
 	}
 
+	c.reporter.ReportBudget(maxPower)
 	return c.setEcoPowerLimit(maxPower)
 }
 
