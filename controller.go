@@ -256,7 +256,7 @@ func (c *controller) isOffPeak(t time.Time) bool {
 }
 
 func (c *controller) computeMaxPower() int32 {
-	if !c.seen(observedStrategy) {
+	if !c.seen(observedStrategy, observedExportedSolar) {
 		// Not enough data to make informed choices - try again when we have more data.
 		return math.MinInt32
 	}
