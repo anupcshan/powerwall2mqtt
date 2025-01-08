@@ -49,12 +49,45 @@ func NewMQTTReporter(client mqtt.Client, topic string) *MQTTReporter {
 		lastSeenValues:       make(map[string]string),
 	}
 
-	go reporter.publishLoop()
+	go reporter.publishLoop(topic)
 
 	return reporter
 }
 
-func (m MQTTReporter) publishLoop() {
+func (m MQTTReporter) publishSensorDiscoveryMessage(topic string, name string, unitOfMeasurement string, deviceClass string) {
+	// Send a Home Assistant discovery message
+	token := m.mqttClient.Publish(
+		fmt.Sprintf("homeassistant/sensor/%s/%s/config", topic, name),
+		0,
+		true,
+		fmt.Sprintf(`{"device": { "name": "Powerwall2mqtt", "identifiers": ["powerwall2mqtt"] }, "name": "%s", "state_topic": "stat/%s/%s", "unit_of_measurement": "%s", "device_class": "%s", "state_class": "measurement"}`, name, topic, name, unitOfMeasurement, deviceClass),
+	)
+	_ = token.Wait()
+	if err := token.Error(); err != nil {
+		log.Printf("Error publishing Home Assistant discovery message: %s", err)
+	}
+}
+
+func (m MQTTReporter) publishBinarySensorDiscoveryMessage(topic, name, deviceClass string) {
+	// Send a Home Assistant discovery message
+	token := m.mqttClient.Publish(
+		fmt.Sprintf("homeassistant/binary_sensor/%s/%s/config", topic, name),
+		0,
+		true,
+		fmt.Sprintf(`{"device": { "name": "Powerwall2mqtt", "identifiers": ["powerwall2mqtt"] }, "name": "%s", "state_topic": "stat/%s/%s", "device_class": "%s", "payload_on": "true", "payload_off": "false"}`, name, topic, name, deviceClass),
+	)
+	_ = token.Wait()
+	if err := token.Error(); err != nil {
+		log.Printf("Error publishing Home Assistant discovery message: %s", err)
+	}
+}
+
+func (m MQTTReporter) publishLoop(topic string) {
+	m.publishSensorDiscoveryMessage(topic, "budget", "W", "power")
+	m.publishBinarySensorDiscoveryMessage(topic, "ev_connected", "connectivity")
+	m.publishSensorDiscoveryMessage(topic, "evse_current", "mA", "current")
+	m.publishSensorDiscoveryMessage(topic, "evse_temperature", "°C", "temperature")
+
 	for item := range m.queue {
 		if m.lastSeenValues[item.topic] == item.payload {
 			continue
