@@ -54,13 +54,13 @@ func NewMQTTReporter(client mqtt.Client, topic string) *MQTTReporter {
 	return reporter
 }
 
-func (m MQTTReporter) publishSensorDiscoveryMessage(topic string, name string, unitOfMeasurement string, deviceClass string) {
+func (m MQTTReporter) publishSensorDiscoveryMessage(topic, name, friendlyName, unitOfMeasurement, deviceClass string) {
 	// Send a Home Assistant discovery message
 	token := m.mqttClient.Publish(
 		fmt.Sprintf("homeassistant/sensor/%s/%s/config", topic, name),
 		0,
 		true,
-		fmt.Sprintf(`{"device": { "name": "Powerwall2mqtt", "identifiers": ["powerwall2mqtt"] }, "name": "%s", "state_topic": "stat/%s/%s", "unit_of_measurement": "%s", "device_class": "%s", "state_class": "measurement"}`, name, topic, name, unitOfMeasurement, deviceClass),
+		fmt.Sprintf(`{"device": { "name": "Powerwall2mqtt", "identifiers": ["powerwall2mqtt"] }, "name": "%s", "state_topic": "stat/%s/%s", "unit_of_measurement": "%s", "device_class": "%s", "state_class": "measurement"}`, friendlyName, topic, name, unitOfMeasurement, deviceClass),
 	)
 	_ = token.Wait()
 	if err := token.Error(); err != nil {
@@ -68,13 +68,13 @@ func (m MQTTReporter) publishSensorDiscoveryMessage(topic string, name string, u
 	}
 }
 
-func (m MQTTReporter) publishBinarySensorDiscoveryMessage(topic, name, deviceClass string) {
+func (m MQTTReporter) publishBinarySensorDiscoveryMessage(topic, name, friendlyName, deviceClass string) {
 	// Send a Home Assistant discovery message
 	token := m.mqttClient.Publish(
 		fmt.Sprintf("homeassistant/binary_sensor/%s/%s/config", topic, name),
 		0,
 		true,
-		fmt.Sprintf(`{"device": { "name": "Powerwall2mqtt", "identifiers": ["powerwall2mqtt"] }, "name": "%s", "state_topic": "stat/%s/%s", "device_class": "%s", "payload_on": "true", "payload_off": "false"}`, name, topic, name, deviceClass),
+		fmt.Sprintf(`{"device": { "name": "Powerwall2mqtt", "identifiers": ["powerwall2mqtt"] }, "name": "%s", "state_topic": "stat/%s/%s", "device_class": "%s", "payload_on": "true", "payload_off": "false"}`, friendlyName, topic, name, deviceClass),
 	)
 	_ = token.Wait()
 	if err := token.Error(); err != nil {
@@ -83,17 +83,17 @@ func (m MQTTReporter) publishBinarySensorDiscoveryMessage(topic, name, deviceCla
 }
 
 func (m MQTTReporter) publishLoop(topic string) {
-	m.publishSensorDiscoveryMessage(topic, "budget", "W", "power")
-	m.publishBinarySensorDiscoveryMessage(topic, "ev_connected", "connectivity")
-	m.publishSensorDiscoveryMessage(topic, "evse_current", "mA", "current")
-	m.publishSensorDiscoveryMessage(topic, "evse_temperature", "°C", "temperature")
+	m.publishSensorDiscoveryMessage(topic, "budget", "Power Budget", "W", "power")
+	m.publishBinarySensorDiscoveryMessage(topic, "ev_connected", "EV Connected", "connectivity")
+	m.publishSensorDiscoveryMessage(topic, "evse_current", "EVSE Current", "mA", "current")
+	m.publishSensorDiscoveryMessage(topic, "evse_temperature", "EVSE Temperature", "°C", "temperature")
 
 	for item := range m.queue {
 		if m.lastSeenValues[item.topic] == item.payload {
 			continue
 		}
 
-		token := m.mqttClient.Publish(item.topic, 0, false, item.payload)
+		token := m.mqttClient.Publish(item.topic, 0, true, item.payload)
 		_ = token.Wait()
 		if err := token.Error(); err != nil {
 			log.Printf("Error publishing %s: %s", item.topic, err)
