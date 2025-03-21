@@ -172,7 +172,17 @@ func main() {
 		gridServicesEnabledGauge,
 	)
 
-	teslaClient := NewTEGClient(*powerwallIP, *password, *debug, batteryLevelGauge, energyExportedGauge, energyImportedGauge, energyLevelGauge, powerGauge, gridServicesEnabledGauge)
+	teslaClient := NewTEGClient(
+		*powerwallIP,
+		*password,
+		*debug,
+		batteryLevelGauge,
+		energyExportedGauge,
+		energyImportedGauge,
+		energyLevelGauge,
+		powerGauge,
+		gridServicesEnabledGauge,
+	)
 	if err := teslaClient.Login(); err != nil {
 		log.Fatal(err)
 	}

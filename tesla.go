@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"strings"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/net/publicsuffix"
@@ -37,6 +38,7 @@ func newHTTPClient() *http.Client {
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		},
+		Timeout: 2 * time.Second,
 	}
 }
 
