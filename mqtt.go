@@ -9,6 +9,7 @@ import (
 
 type Reporter interface {
 	ReportBudget(watts int32)
+	ReportLoad(watts int32)
 	ReportEVConnected(connected bool)
 	ReportEVSECurrent(milliamps int64)
 	ReportEVSETemperature(temp Temperature)
@@ -18,6 +19,7 @@ type NoopReporter struct {
 }
 
 func (NoopReporter) ReportBudget(int32)                {}
+func (NoopReporter) ReportLoad(int32)                  {}
 func (NoopReporter) ReportEVConnected(bool)            {}
 func (NoopReporter) ReportEVSECurrent(int64)           {}
 func (NoopReporter) ReportEVSETemperature(Temperature) {}
@@ -31,6 +33,7 @@ type MQTTReporter struct {
 	mqttClient mqtt.Client
 
 	budgetTopic          string
+	loadTopic            string
 	evConnectedTopic     string
 	evSECurrentTopic     string
 	evSETemperatureTopic string
@@ -42,6 +45,7 @@ func NewMQTTReporter(client mqtt.Client, topic string) *MQTTReporter {
 	reporter := &MQTTReporter{
 		mqttClient:           client,
 		budgetTopic:          fmt.Sprintf("stat/%s/budget", topic),
+		loadTopic:            fmt.Sprintf("stat/%s/load", topic),
 		evConnectedTopic:     fmt.Sprintf("stat/%s/ev_connected", topic),
 		evSECurrentTopic:     fmt.Sprintf("stat/%s/evse_current", topic),
 		evSETemperatureTopic: fmt.Sprintf("stat/%s/evse_temperature", topic),
@@ -84,6 +88,7 @@ func (m MQTTReporter) publishBinarySensorDiscoveryMessage(topic, name, friendlyN
 
 func (m MQTTReporter) publishLoop(topic string) {
 	m.publishSensorDiscoveryMessage(topic, "budget", "Power Budget", "W", "power")
+	m.publishSensorDiscoveryMessage(topic, "load", "Load Power", "W", "power")
 	m.publishBinarySensorDiscoveryMessage(topic, "ev_connected", "EV Connected", "connectivity")
 	m.publishSensorDiscoveryMessage(topic, "evse_current", "EVSE Current", "mA", "current")
 	m.publishSensorDiscoveryMessage(topic, "evse_temperature", "EVSE Temperature", "°C", "temperature")
@@ -106,6 +111,13 @@ func (m MQTTReporter) publishLoop(topic string) {
 func (m MQTTReporter) ReportBudget(watts int32) {
 	select {
 	case m.queue <- ToNotify{m.budgetTopic, fmt.Sprintf("%d", watts)}:
+	default:
+	}
+}
+
+func (m MQTTReporter) ReportLoad(watts int32) {
+	select {
+	case m.queue <- ToNotify{m.loadTopic, fmt.Sprintf("%d", watts)}:
 	default:
 	}
 }

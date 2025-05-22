@@ -150,6 +150,7 @@ func (c *controller) SetSolarW(solarW float64) {
 
 func (c *controller) SetLoadW(loadW float64) {
 	updateSensor(c, &c.loadW, loadW, observedOperationMode)
+	c.reporter.ReportLoad(int32(math.Round(loadW)))
 }
 
 func (c *controller) SetOperationMode(operationMode OperationMode) {
