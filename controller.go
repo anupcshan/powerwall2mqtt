@@ -134,10 +134,12 @@ func updateSensor[T comparable](c *controller, oldValue *T, newValue T, obs obse
 
 func (c *controller) SetPowerwallBatteryLevelPercent(batt float64) {
 	updateSensor(c, &c.pwBatteryLevelPercent, batt, observedBatteryLevel)
+	c.reporter.ReportBatteryLevel(batt)
 }
 
 func (c *controller) SetExportedBatteryW(batteryW float64) {
 	updateSensor(c, &c.exportedBatteryW, batteryW, observedBattery)
+	c.reporter.ReportBatteryExport(int32(math.Round(batteryW)))
 }
 
 func (c *controller) SetExportedSolarW(solarW float64) {
@@ -146,6 +148,7 @@ func (c *controller) SetExportedSolarW(solarW float64) {
 
 func (c *controller) SetSolarW(solarW float64) {
 	updateSensor(c, &c.solarW, solarW, observedSolar)
+	c.reporter.ReportSolar(int32(math.Round(solarW)))
 }
 
 func (c *controller) SetLoadW(loadW float64) {

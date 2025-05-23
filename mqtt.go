@@ -13,6 +13,9 @@ type Reporter interface {
 	ReportEVConnected(connected bool)
 	ReportEVSECurrent(milliamps int64)
 	ReportEVSETemperature(temp Temperature)
+	ReportSolar(watts int32)
+	ReportBatteryExport(watts int32)
+	ReportBatteryLevel(percent float64)
 }
 
 type NoopReporter struct {
@@ -23,6 +26,9 @@ func (NoopReporter) ReportLoad(int32)                  {}
 func (NoopReporter) ReportEVConnected(bool)            {}
 func (NoopReporter) ReportEVSECurrent(int64)           {}
 func (NoopReporter) ReportEVSETemperature(Temperature) {}
+func (NoopReporter) ReportSolar(int32)                 {}
+func (NoopReporter) ReportBatteryExport(int32)         {}
+func (NoopReporter) ReportBatteryLevel(float64)        {}
 
 type ToNotify struct {
 	topic   string
@@ -37,6 +43,9 @@ type MQTTReporter struct {
 	evConnectedTopic     string
 	evSECurrentTopic     string
 	evSETemperatureTopic string
+	solarTopic           string
+	batteryExportTopic   string
+	batteryLevelTopic    string
 	queue                chan ToNotify
 	lastSeenValues       map[string]string
 }
@@ -49,6 +58,9 @@ func NewMQTTReporter(client mqtt.Client, topic string) *MQTTReporter {
 		evConnectedTopic:     fmt.Sprintf("stat/%s/ev_connected", topic),
 		evSECurrentTopic:     fmt.Sprintf("stat/%s/evse_current", topic),
 		evSETemperatureTopic: fmt.Sprintf("stat/%s/evse_temperature", topic),
+		solarTopic:           fmt.Sprintf("stat/%s/solar", topic),
+		batteryExportTopic:   fmt.Sprintf("stat/%s/battery_export", topic),
+		batteryLevelTopic:    fmt.Sprintf("stat/%s/battery_level", topic),
 		queue:                make(chan ToNotify, 10),
 		lastSeenValues:       make(map[string]string),
 	}
@@ -92,6 +104,9 @@ func (m MQTTReporter) publishLoop(topic string) {
 	m.publishBinarySensorDiscoveryMessage(topic, "ev_connected", "EV Connected", "connectivity")
 	m.publishSensorDiscoveryMessage(topic, "evse_current", "EVSE Current", "mA", "current")
 	m.publishSensorDiscoveryMessage(topic, "evse_temperature", "EVSE Temperature", "°C", "temperature")
+	m.publishSensorDiscoveryMessage(topic, "solar", "Solar Power", "W", "power")
+	m.publishSensorDiscoveryMessage(topic, "battery_export", "Battery Export", "W", "power")
+	m.publishSensorDiscoveryMessage(topic, "battery_level", "Battery Level", "%", "battery")
 
 	for item := range m.queue {
 		if m.lastSeenValues[item.topic] == item.payload {
@@ -139,6 +154,27 @@ func (m MQTTReporter) ReportEVSECurrent(milliamps int64) {
 func (m MQTTReporter) ReportEVSETemperature(temp Temperature) {
 	select {
 	case m.queue <- ToNotify{m.evSETemperatureTopic, fmt.Sprintf("%f", temp.ToCelsius())}:
+	default:
+	}
+}
+
+func (m MQTTReporter) ReportSolar(watts int32) {
+	select {
+	case m.queue <- ToNotify{m.solarTopic, fmt.Sprintf("%d", watts)}:
+	default:
+	}
+}
+
+func (m MQTTReporter) ReportBatteryExport(watts int32) {
+	select {
+	case m.queue <- ToNotify{m.batteryExportTopic, fmt.Sprintf("%d", watts)}:
+	default:
+	}
+}
+
+func (m MQTTReporter) ReportBatteryLevel(percent float64) {
+	select {
+	case m.queue <- ToNotify{m.batteryLevelTopic, fmt.Sprintf("%.1f", percent)}:
 	default:
 	}
 }
